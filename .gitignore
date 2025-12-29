@@ -1,0 +1,8 @@
+# Generated SEO reports and data
+tuworker_crawl_*.jl
+tuworker_crawl_*.log
+tuworker_report_*.md
+
+# Python
+__pycache__/
+*.pyc
