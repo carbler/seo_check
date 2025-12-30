@@ -25,11 +25,19 @@ def print_section(title):
     print(f"{'─'*60}\n")
 
 def to_list(val):
-    """Helper to ensure value is a list."""
+    """
+    Helper to ensure value is a list.
+    Handles advertools '@@' separator for multi-value fields.
+    """
     if isinstance(val, list):
         return val
+
     if pd.isna(val) or val == '':
         return []
-    # If it's a string that looks like a list representation (rare in JL but possible)
-    # or just a single string
-    return [str(val)]
+
+    # Advertools uses '@@' to join multiple values in a single string column
+    val_str = str(val)
+    if '@@' in val_str:
+        return val_str.split('@@')
+
+    return [val_str]
