@@ -1,41 +1,55 @@
 from datetime import datetime
+from dataclasses import dataclass, field
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
+@dataclass
+class SEOConfig:
+    """Configuration settings for the SEO Analyzer."""
 
-# Site to Analyze
-BASE_URL = 'https://tuworker.com'
-SITEMAP_URL = 'https://tuworker.com/sitemap-0.xml'
+    # Site to Analyze
+    base_url: str = 'https://tuworker.com'
+    sitemap_url: str = 'https://tuworker.com/sitemap-0.xml'
 
-# Crawl Configuration
-USER_AGENT = 'TuWorkerBot/1.0 (+https://tuworker.com/bot)'
-CONCURRENT_REQUESTS = 8
-DOWNLOAD_DELAY = 0.5  # seconds between requests
-ROBOTSTXT_OBEY = True
-FOLLOW_LINKS = True  # Follow internal links
-MAX_DEPTH = 10  # Maximum depth
-TIMEOUT = 7200  # 2 hours max
+    # Crawl Configuration
+    user_agent: str = 'TuWorkerBot/1.0 (+https://tuworker.com/bot)'
+    concurrent_requests: int = 8
+    download_delay: float = 0.5
+    robotstxt_obey: bool = True
+    follow_links: bool = True
+    max_depth: int = 10
+    timeout: int = 7200  # 2 hours
 
-# SEO Limits & Thresholds
-TITLE_MIN_LENGTH = 30
-TITLE_MAX_LENGTH = 60
-META_DESC_MIN_LENGTH = 120
-META_DESC_MAX_LENGTH = 160
-SLOW_PAGE_THRESHOLD = 3.0  # seconds
+    # SEO Limits & Thresholds
+    title_min_length: int = 30
+    title_max_length: int = 60
+    meta_desc_min_length: int = 120
+    meta_desc_max_length: int = 160
+    slow_page_threshold: float = 3.0
 
-# Output Files
-TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-CRAWL_FILE = f'tuworker_crawl_{TIMESTAMP}.jl'
-LOG_FILE = f'tuworker_crawl_{TIMESTAMP}.log'
-REPORT_FILE = f'tuworker_report_{TIMESTAMP}.md'
+    # Thresholds (% of pages with issues)
+    critical_threshold: int = 5
+    warning_threshold: int = 10
 
-# Thresholds (% of pages with issues)
-CRITICAL_THRESHOLD = 5   # >5% = critical
-WARNING_THRESHOLD = 10   # >10% = warning
+    # Integrations
+    enable_gsc: bool = False
+    enable_ga: bool = False
+    gsc_property: str = 'https://tuworker.com'
+    ga_view_id: str = ''
 
-# Integrations (Disabled as per request)
-ENABLE_GSC = False
-ENABLE_GA = False
-GSC_PROPERTY = 'https://tuworker.com'
-GA_VIEW_ID = ''
+    # Output Configuration
+    output_format: str = 'json'  # options: 'md', 'html', 'json'
+
+    # Dynamic Filenames
+    timestamp: str = field(default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))
+
+    @property
+    def crawl_file(self) -> str:
+        return f'tuworker_crawl_{self.timestamp}.jl'
+
+    @property
+    def log_file(self) -> str:
+        return f'tuworker_crawl_{self.timestamp}.log'
+
+    @property
+    def report_file(self) -> str:
+        ext = self.output_format.lower()
+        return f'tuworker_report_{self.timestamp}.{ext}'
