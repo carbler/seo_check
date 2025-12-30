@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TuWorker SEO Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+
+        <!-- Header -->
+        <div class="flex items-center gap-3 mb-8">
+            <i class="fa-solid fa-chart-line text-blue-600 text-3xl"></i>
+            <h1 class="text-3xl font-bold text-gray-900">SEO Analyzer Dashboard</h1>
+        </div>
+
+        <!-- Notification -->
+        {% if request.query_params.get("status") == "started" %}
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+            <p class="font-bold">Analysis Started!</p>
+            <p>The crawl is running in the background. Refresh this page in a minute to see the new report.</p>
+        </div>
+        {% endif %}
+
+        <!-- Analysis Form -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Start New Audit</h2>
+            <form action="/analyze" method="post" class="flex flex-col md:flex-row gap-4 items-end">
+                <div class="flex-1 w-full">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Target URL</label>
+                    <input type="url" name="url" placeholder="https://example.com" required
+                           class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                </div>
+                <div class="w-full md:w-32">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Depth</label>
+                    <input type="number" name="depth" value="3" min="1" max="10"
+                           class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                </div>
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition font-medium w-full md:w-auto">
+                    Analyze
+                </button>
+            </form>
+        </div>
+
+        <!-- History Table -->
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-700">Report History</h2>
+                <button onclick="window.location.reload()" class="text-sm text-blue-600 hover:underline">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target URL</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pages</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for report in reports %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ report.date[:19] }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ report.url }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ report.pages }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                    {% if report.score >= 90 %} bg-green-100 text-green-800
+                                    {% elif report.score >= 50 %} bg-yellow-100 text-yellow-800
+                                    {% else %} bg-red-100 text-red-800 {% endif %}">
+                                    {{ report.score | round(1) }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <a href="/report/{{ report.id }}" class="text-blue-600 hover:text-blue-900 flex items-center justify-end gap-1">
+                                    View Report <i class="fa-solid fa-arrow-right"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                                No reports found. Start an analysis above.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

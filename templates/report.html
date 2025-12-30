@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Report Viewer - SEO Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .score-circle {
+            width: 120px; height: 120px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.5rem; font-weight: bold;
+            border: 8px solid;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans"
+      x-data="seoViewer('{{ report_id }}')"
+      x-init="loadData()">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-gray-500 hover:text-gray-700 transition">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </a>
+                <h1 class="text-xl font-bold text-gray-900">Analysis Report</h1>
+            </div>
+            <div class="text-sm text-gray-500" x-text="report ? report.meta.target_url : 'Loading...'"></div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+
+        <!-- Loading State -->
+        <div x-show="loading" class="flex justify-center py-20">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600"></i>
+        </div>
+
+        <!-- Error State -->
+        <div x-show="error" x-cloak class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong class="font-bold">Error!</strong>
+            <span class="block sm:inline">Failed to load report data. Please try again.</span>
+        </div>
+
+        <!-- Dashboard -->
+        <div x-show="report && !loading" x-cloak class="space-y-8">
+
+            <!-- Executive Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Score -->
+                <div class="bg-white p-6 rounded-lg shadow-sm flex flex-col items-center justify-center col-span-1">
+                    <div class="score-circle mb-2"
+                         :class="{
+                            'border-green-500 text-green-600': report?.summary.score >= 90,
+                            'border-blue-500 text-blue-600': report?.summary.score >= 70 && report?.summary.score < 90,
+                            'border-yellow-500 text-yellow-600': report?.summary.score >= 50 && report?.summary.score < 70,
+                            'border-red-500 text-red-600': report?.summary.score < 50
+                         }"
+                         x-text="report?.summary.score.toFixed(0)">
+                    </div>
+                    <span class="font-semibold text-gray-600" x-text="report?.summary.rating"></span>
+                </div>
+
+                <!-- Stats -->
+                <div class="col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-red-500">
+                        <div class="text-gray-500 text-sm font-medium uppercase">Critical Errors</div>
+                        <div class="text-3xl font-bold text-gray-900 mt-1" x-text="counts.errors"></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-yellow-500">
+                        <div class="text-gray-500 text-sm font-medium uppercase">Warnings</div>
+                        <div class="text-3xl font-bold text-gray-900 mt-1" x-text="counts.warnings"></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
+                        <div class="text-gray-500 text-sm font-medium uppercase">Total Pages</div>
+                        <div class="text-3xl font-bold text-gray-900 mt-1" x-text="report?.summary.total_pages"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex gap-6">
+                    <button @click="tab = 'issues'" :class="{'border-blue-500 text-blue-600': tab === 'issues', 'border-transparent text-gray-500': tab !== 'issues'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Issues List</button>
+                    <button @click="tab = 'pages'" :class="{'border-blue-500 text-blue-600': tab === 'pages', 'border-transparent text-gray-500': tab !== 'pages'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Page Explorer</button>
+                    <button @click="tab = 'glossary'" :class="{'border-blue-500 text-blue-600': tab === 'glossary', 'border-transparent text-gray-500': tab !== 'glossary'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Glossary</button>
+                </nav>
+            </div>
+
+            <!-- Issues Tab -->
+            <div x-show="tab === 'issues'" class="space-y-6">
+                <!-- Errors -->
+                <template x-if="report?.metrics.issues.errors.length > 0">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <div class="bg-red-50 px-6 py-4 border-b border-red-100 flex justify-between">
+                            <h3 class="font-semibold text-red-800">Critical Issues</h3>
+                            <span class="bg-red-200 text-red-800 text-xs px-2 py-1 rounded-full" x-text="report.metrics.issues.errors.length"></span>
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <template x-for="issue in report.metrics.issues.errors">
+                                <div class="px-6 py-4" x-data="{ expanded: false }">
+                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
+                                        <div>
+                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                    </div>
+                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-red-200 text-sm text-gray-600 space-y-1">
+                                        <template x-for="item in normalizeItems(issue.items)">
+                                            <div class="truncate font-mono text-xs" x-text="item"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Warnings -->
+                <template x-if="report?.metrics.issues.warnings.length > 0">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <div class="bg-yellow-50 px-6 py-4 border-b border-yellow-100 flex justify-between">
+                            <h3 class="font-semibold text-yellow-800">Warnings</h3>
+                            <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full" x-text="report.metrics.issues.warnings.length"></span>
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <template x-for="issue in report.metrics.issues.warnings">
+                                <div class="px-6 py-4" x-data="{ expanded: false }">
+                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
+                                        <div>
+                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                    </div>
+                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-yellow-200 text-sm text-gray-600 space-y-1">
+                                        <template x-for="item in normalizeItems(issue.items)">
+                                            <div class="truncate font-mono text-xs" x-text="item"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Page Explorer Tab -->
+            <div x-show="tab === 'pages'" class="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div class="p-4 bg-gray-50 border-b border-gray-200 flex gap-4">
+                    <input type="text" x-model="search" placeholder="Search URL..." class="flex-1 px-4 py-2 border rounded-md text-sm">
+                    <select x-model="filterStatus" class="px-4 py-2 border rounded-md text-sm">
+                        <option value="all">All</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Warning">Warning</option>
+                        <option value="Good">Good</option>
+                    </select>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issues</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="(data, url) in filteredPages" :key="url">
+                                <tr class="hover:bg-gray-50 cursor-pointer" @click="openPageDetails(url, data)">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 text-xs font-semibold rounded-full"
+                                              :class="{
+                                                'bg-red-100 text-red-800': data.status.includes('Critical'),
+                                                'bg-yellow-100 text-yellow-800': data.status.includes('Warning'),
+                                                'bg-green-100 text-green-800': data.status.includes('Good'),
+                                                'bg-blue-100 text-blue-800': data.status.includes('Notice')
+                                              }"
+                                              x-text="data.status.replace(/[^a-zA-Z]/g, '')">
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-500 max-w-md truncate" x-text="url"></td>
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="data.issues.length + ' issues'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Glossary Tab -->
+            <div x-show="tab === 'glossary'" class="bg-white rounded-lg shadow-sm p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <template x-for="(desc, term) in report?.glossary" :key="term">
+                        <div class="border border-gray-200 rounded p-4">
+                            <h4 class="font-bold text-gray-800 mb-2" x-text="term"></h4>
+                            <p class="text-sm text-gray-600" x-text="desc"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Page Detail Modal -->
+        <div x-show="selectedPage" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @click.self="selectedPage = null">
+            <div class="flex items-center justify-center min-h-screen px-4">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75"></div>
+                <div class="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-2xl w-full z-10">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">Page Details</h3>
+                        <p class="text-sm text-gray-500 break-all" x-text="selectedPage?.url"></p>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="font-bold text-gray-700 mb-2">Issues Detected:</h4>
+                        <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
+                            <template x-for="issue in selectedPage?.data.issues">
+                                <li x-text="issue"></li>
+                            </template>
+                            <li x-show="!selectedPage?.data.issues.length" class="text-green-600 list-none">✅ No issues found.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-gray-50 px-6 py-3 flex justify-end">
+                        <button class="bg-white border border-gray-300 rounded-md shadow-sm px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="selectedPage = null">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        function seoViewer(reportId) {
+            return {
+                report: null,
+                loading: true,
+                error: false,
+                tab: 'issues',
+                counts: { errors: 0, warnings: 0 },
+                search: '',
+                filterStatus: 'all',
+                selectedPage: null,
+
+                async loadData() {
+                    try {
+                        const response = await fetch(`/api/reports/${reportId}`);
+                        if (!response.ok) throw new Error('Failed to fetch');
+                        this.report = await response.json();
+                        this.calculateCounts();
+                        this.loading = false;
+                    } catch (e) {
+                        this.error = true;
+                        this.loading = false;
+                    }
+                },
+
+                calculateCounts() {
+                    if (!this.report) return;
+                    this.counts.errors = this.report.metrics.issues.errors.reduce((acc, i) => acc + i.count, 0);
+                    this.counts.warnings = this.report.metrics.issues.warnings.reduce((acc, i) => acc + i.count, 0);
+                },
+
+                normalizeItems(items) {
+                    if (Array.isArray(items)) {
+                        return items.map(i => {
+                            if (typeof i === 'string') return i;
+                            if (i.url) return i.url + (i.count ? ` (${i.count})` : '');
+                            return JSON.stringify(i);
+                        });
+                    }
+                    if (typeof items === 'object') {
+                        let res = [];
+                        for (let [key, val] of Object.entries(items)) {
+                            res.push(`"${key}": ` + val.join(', '));
+                        }
+                        return res;
+                    }
+                    return [];
+                },
+
+                get filteredPages() {
+                    if (!this.report) return {};
+                    const pages = this.report.metrics.page_details;
+                    return Object.fromEntries(
+                        Object.entries(pages).filter(([url, data]) => {
+                            const matchesSearch = url.toLowerCase().includes(this.search.toLowerCase());
+                            const matchesFilter = this.filterStatus === 'all' || data.status.includes(this.filterStatus);
+                            return matchesSearch && matchesFilter;
+                        })
+                    );
+                },
+
+                openPageDetails(url, data) {
+                    this.selectedPage = { url, data };
+                }
+            }
+        }
+    </script>
+</body>
+</html>
