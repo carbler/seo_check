@@ -25,6 +25,8 @@ class SEOConfig:
     meta_desc_min_length: int = 120
     meta_desc_max_length: int = 160
     slow_page_threshold: float = 3.0
+    min_word_count: int = 250
+    text_ratio_threshold: float = 10.0  # Percentage
 
     # Thresholds (% of pages with issues)
     critical_threshold: int = 5

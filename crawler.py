@@ -20,6 +20,12 @@ class SEOCrawler:
         print(f"   • Max depth: {self.config.max_depth}")
         print("   • No page limit")
 
+        # Add body text extraction to enable content analysis
+        # Using a custom name to avoid conflict with advertools default keys if present
+        selectors = {
+            'page_body_text': 'body ::text',
+        }
+
         custom_settings = {
             'LOG_FILE': self.config.log_file,
             'ROBOTSTXT_OBEY': self.config.robotstxt_obey,
@@ -42,6 +48,7 @@ class SEOCrawler:
                 self.config.base_url,
                 output_file=self.config.crawl_file,
                 follow_links=self.config.follow_links,
+                css_selectors=selectors,
                 custom_settings=custom_settings
             )
         except Exception as e:

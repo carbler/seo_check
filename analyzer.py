@@ -30,9 +30,11 @@ class SEOAnalyzer:
         metrics['links'] = self._analyze_links(df)
         metrics['security'] = self._analyze_security(df)
         metrics['others'] = self._analyze_others(df)
+        metrics['content'] = self._analyze_content(df)
 
         # New Semrush-style categorizations
         metrics['issues'] = self._categorize_issues(metrics)
+        metrics['page_details'] = self._get_page_level_analysis(df, metrics)
 
         return metrics
 
@@ -252,7 +254,6 @@ class SEOAnalyzer:
             'avg_time': avg_time
         }
 
-        # URL Depth Analysis
         if 'url' in df.columns:
             df['depth'] = df['url'].astype(str).apply(lambda x: x.count('/'))
             avg_depth = df['depth'].mean()
@@ -270,6 +271,39 @@ class SEOAnalyzer:
         }
 
         return results
+
+    def _analyze_content(self, df):
+        """Analyzes content quality (Word count, Text Ratio)."""
+        low_word_count = []
+        low_text_ratio = []
+
+        # Check for custom extracted 'page_body_text' or standard 'body_text'
+        col_name = 'page_body_text' if 'page_body_text' in df.columns else 'body_text'
+
+        if col_name in df.columns:
+            for _, row in df.iterrows():
+                # Advertools puts extracted text in one string column if using selectors.
+                text_content = str(row.get(col_name, ''))
+
+                # Word Count
+                words = len(text_content.split())
+                if words < self.config.min_word_count:
+                    low_word_count.append({'url': row['url'], 'count': words})
+
+                # Ratio
+                # Approximating HTML size from 'size' column (bytes) vs text length
+                html_size = row.get('size', 0)
+                text_size = len(text_content)
+
+                if html_size > 0:
+                    ratio = (text_size / html_size) * 100
+                    if ratio < self.config.text_ratio_threshold:
+                        low_text_ratio.append({'url': row['url'], 'ratio': ratio})
+
+        return {
+            'low_word_count': low_word_count,
+            'low_text_ratio': low_text_ratio
+        }
 
     def _categorize_issues(self, metrics):
         """Categorize findings into Errors, Warnings, and Notices."""
@@ -304,6 +338,8 @@ class SEOAnalyzer:
             warnings.append({'name': 'Images Missing Alt Text', 'count': metrics['images']['missing_alt_count'], 'items': metrics['images']['missing_alt_details']})
         if metrics['others']['performance']['slow_pages']:
             warnings.append({'name': 'Slow Load Time', 'count': len(metrics['others']['performance']['slow_pages']), 'items': metrics['others']['performance']['slow_pages']})
+        if metrics['content']['low_word_count']:
+            warnings.append({'name': 'Low Word Count', 'count': len(metrics['content']['low_word_count']), 'items': metrics['content']['low_word_count']})
 
         # Notices (Info/Optimization)
         if metrics['http']['redirects']:
@@ -316,8 +352,100 @@ class SEOAnalyzer:
             notices.append({'name': 'Meta Desc Too Long', 'count': len(metrics['meta']['long']), 'items': metrics['meta']['long']})
         if metrics['canonical']['no_canonical']:
             notices.append({'name': 'Missing Canonical', 'count': len(metrics['canonical']['no_canonical']), 'items': metrics['canonical']['no_canonical']})
+        if metrics['content']['low_text_ratio']:
+            notices.append({'name': 'Low Text-HTML Ratio', 'count': len(metrics['content']['low_text_ratio']), 'items': metrics['content']['low_text_ratio']})
 
         return {'errors': errors, 'warnings': warnings, 'notices': notices}
+
+    def _get_page_level_analysis(self, df, metrics):
+        """Generates a detailed per-page analysis."""
+        page_details = {}
+
+        # Pre-process issues mapping: URL -> List of issues
+        url_issues = {}
+
+        all_issues = metrics['issues']['errors'] + metrics['issues']['warnings'] + metrics['issues']['notices']
+
+        for issue_group in all_issues:
+            name = issue_group['name']
+            items = issue_group['items']
+
+            # Identify URLs in items based on structure
+            if isinstance(items, dict): # Duplicates {text: [urls]}
+                for text, urls in items.items():
+                    for url in urls:
+                        if url not in url_issues: url_issues[url] = []
+                        url_issues[url].append(f"{name}: '{text[:30]}...'")
+            elif isinstance(items, list):
+                for item in items:
+                    url = None
+                    extra = ""
+                    if isinstance(item, str):
+                        url = item
+                    elif isinstance(item, dict) and 'url' in item:
+                        url = item['url']
+                        if 'count' in item: extra = f" ({item['count']})"
+                        if 'ratio' in item: extra = f" ({item['ratio']:.1f}%)"
+                        if 'status' in item: extra = f" ({item['status']})"
+
+                    if url:
+                        if url not in url_issues: url_issues[url] = []
+                        url_issues[url].append(f"{name}{extra}")
+
+        # Iterate all pages
+        for _, row in df.iterrows():
+            url = row['url']
+            title = str(row.get('title', ''))[:50]
+            meta = str(row.get('meta_desc', ''))[:50]
+            h1 = str(row.get('h1', ''))[:50]
+
+            # Words
+            col_name = 'page_body_text' if 'page_body_text' in df.columns else 'body_text'
+            words = len(str(row.get(col_name, '')).split())
+
+            status = "✅ Good"
+            issues_list = url_issues.get(url, [])
+
+            if any(i in [e['name'] for e in metrics['issues']['errors']] for i in [x.split(':')[0] for x in issues_list]):
+                status = "🔴 Critical"
+            elif any(i in [e['name'] for e in metrics['issues']['warnings']] for i in [x.split(':')[0] for x in issues_list]):
+                status = "⚠️ Warning"
+            elif issues_list:
+                status = "🔵 Notice"
+
+            page_details[url] = {
+                'status': status,
+                'title': title,
+                'h1': h1,
+                'words': words,
+                'issues': issues_list
+            }
+
+        return page_details
+
+    def get_issue_definitions(self):
+        """Returns a glossary of issue definitions."""
+        return {
+            "Broken Links (4xx)": "Links pointing to pages that do not exist (404 errors). User experience and crawlability are negatively affected.",
+            "Server Errors (5xx)": "The server failed to fulfill a valid request. Indicates server instability.",
+            "Duplicate Titles": "Multiple pages share the same Title Tag. Search engines may not know which page to rank.",
+            "Non-HTTPS Pages": "Pages served over insecure HTTP connection. Google prioritizes HTTPS.",
+            "Missing H1 Tags": "Pages without a main Heading 1. H1 is crucial for understanding page topic.",
+            "Duplicate H1 Content": "Multiple pages share the same H1. Can indicate duplicate content.",
+            "Missing Meta Descriptions": "No summary provided for search results. Lower CTR potential.",
+            "Duplicate Meta Descriptions": "Multiple pages use the same description. Bad for uniqueness.",
+            "Missing Titles": "Page has no <title> tag. Critical for SEO ranking.",
+            "Titles Too Long": f"Title exceeds {self.config.title_max_length} chars. Will be truncated in SERPs.",
+            "Images Missing Alt Text": "Images without textual description. Bad for accessibility and Image SEO.",
+            "Slow Load Time": f"Page took longer than {self.config.slow_page_threshold}s to respond.",
+            "Low Word Count": f"Page has less than {self.config.min_word_count} words. May be considered 'Thin Content'.",
+            "Redirects (3xx)": "Page redirects to another URL. Too many redirects waste crawl budget.",
+            "Titles Too Short": f"Title is less than {self.config.title_min_length} chars. May not be descriptive enough.",
+            "Meta Desc Too Short": "Description is too brief to entice clicks.",
+            "Meta Desc Too Long": "Description will be cut off in search results.",
+            "Missing Canonical": "No canonical tag found. Search engines may struggle with duplicate versions.",
+            "Low Text-HTML Ratio": "Page code is bloated compared to visible text. Can indicate code efficiency issues."
+        }
 
 
 class SEOScorer:

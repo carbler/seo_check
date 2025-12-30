@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import json
 from config import SEOConfig
+from analyzer import SEOAnalyzer
 
 class SEOReporter(ABC):
     """Abstract base class for SEO reporters."""
@@ -12,6 +13,8 @@ class SEOReporter(ABC):
         self.score = score
         self.rating = rating
         self.penalties = penalties
+        # Helper to access definitions via Analyzer static or instance
+        self.definitions = SEOAnalyzer(config).get_issue_definitions()
 
     @abstractmethod
     def generate(self):
@@ -25,6 +28,7 @@ class MarkdownReporter(SEOReporter):
         filename = self.config.report_file
         issues = self.metrics.get('issues', {'errors': [], 'warnings': [], 'notices': []})
         http = self.metrics['http']
+        page_details = self.metrics.get('page_details', {})
 
         with open(filename, 'w', encoding='utf-8') as f:
             # HEADER
@@ -61,15 +65,41 @@ class MarkdownReporter(SEOReporter):
                 f.write("No major issues found! 🎉\n")
             f.write("\n---\n\n")
 
+            # --- DETAILED PAGE AUDIT (NEW SECTION) ---
+            f.write("## 📑 Detailed Page Audit\n")
+            f.write("Below is a detailed breakdown of findings for each crawled page.\n\n")
+
+            # Sort pages: Errors first, then Warnings, then Good
+            sorted_pages = sorted(page_details.items(), key=lambda item: 0 if "Critical" in item[1]['status'] else 1 if "Warning" in item[1]['status'] else 2)
+
+            for url, data in sorted_pages:
+                status_icon = data['status'].split()[0]
+                f.write(f"### {status_icon} {url}\n")
+                f.write(f"**Status:** {data['status']} | **Title:** \"{data['title']}\" | **Words:** {data['words']}\n")
+
+                if data['issues']:
+                    f.write("\n**Issues Found:**\n")
+                    for issue in data['issues']:
+                        # Determine icon based on issue type text
+                        icon = "🔵"
+                        if any(e['name'] in issue for e in issues['errors']): icon = "🔴"
+                        elif any(w['name'] in issue for w in issues['warnings']): icon = "⚠️"
+                        f.write(f"- {icon} {issue}\n")
+                else:
+                    f.write("\n✅ No issues detected.\n")
+                f.write("\n---\n")
+
+            # --- GLOSSARY (NEW SECTION) ---
+            f.write("\n## 📚 Glossary: Understanding Your Report\n")
+            f.write("| Issue Type | Description |\n")
+            f.write("|---|---|\n")
+            for name, desc in self.definitions.items():
+                f.write(f"| **{name}** | {desc} |\n")
+            f.write("\n---\n")
+
             # THEMATIC REPORT: CRAWLABILITY
             f.write("## 🕷️ Crawlability & Site Architecture\n")
             f.write(f"- **HTTP Status:** 200 OK ({http['stats'].get(200, 0)}) | Redirects ({len(http['redirects'])}) | Errors ({len(http['broken_links']) + len(http['server_errors'])})\n")
-
-            if 'urls' in self.metrics['others']:
-                depth_dist = self.metrics['others']['urls'].get('depth_dist', {})
-                f.write(f"- **Crawl Depth:** Avg: {self.metrics['others']['urls']['avg_depth']:.1f} | Max: {self.metrics['others']['urls']['max_depth']}\n")
-                # Simple depth chart
-                # f.write("  - Depth Distribution: " + ", ".join([f"L{k}:{v}" for k,v in depth_dist.items()]) + "\n")
 
             if http['broken_links']:
                 self._write_expandable_section(f, "Broken Links (4xx)", http['broken_links'], lambda x: f"- {x['url']} ({x['status']})")
@@ -83,6 +113,7 @@ class MarkdownReporter(SEOReporter):
             self._write_issue_group(f, issues, ['Duplicate Titles', 'Missing Titles', 'Titles Too Long', 'Titles Too Short'])
             self._write_issue_group(f, issues, ['Missing H1 Tags', 'Duplicate H1 Content'])
             self._write_issue_group(f, issues, ['Missing Meta Descriptions', 'Duplicate Meta Descriptions', 'Meta Desc Too Short', 'Meta Desc Too Long'])
+            self._write_issue_group(f, issues, ['Low Word Count', 'Low Text-HTML Ratio'])
             f.write("\n")
 
             # THEMATIC REPORT: TECHNICAL & PERFORMANCE
@@ -122,6 +153,10 @@ class MarkdownReporter(SEOReporter):
         elif 'Images' in issue_name:
              # Expects dict {url, count}
             return lambda item: f"- {item['url']} ({item['count']} images)"
+        elif 'Word' in issue_name:
+            return lambda item: f"- {item['url']} ({item['count']} words)"
+        elif 'Ratio' in issue_name:
+            return lambda item: f"- {item['url']} ({item['ratio']:.1f}%)"
         else:
             # Expects strings or simple dicts with url
             return lambda item: f"- {item if isinstance(item, str) else item.get('url', item)}"
