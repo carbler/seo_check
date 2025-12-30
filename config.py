@@ -17,6 +17,13 @@ FOLLOW_LINKS = True  # Follow internal links
 MAX_DEPTH = 10  # Maximum depth
 TIMEOUT = 7200  # 2 hours max
 
+# SEO Limits & Thresholds
+TITLE_MIN_LENGTH = 30
+TITLE_MAX_LENGTH = 60
+META_DESC_MIN_LENGTH = 120
+META_DESC_MAX_LENGTH = 160
+SLOW_PAGE_THRESHOLD = 3.0  # seconds
+
 # Output Files
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 CRAWL_FILE = f'tuworker_crawl_{TIMESTAMP}.jl'

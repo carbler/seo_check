@@ -1,5 +1,8 @@
 from datetime import datetime
-from config import BASE_URL
+from config import (
+    BASE_URL, TITLE_MIN_LENGTH, TITLE_MAX_LENGTH,
+    META_DESC_MIN_LENGTH, META_DESC_MAX_LENGTH, SLOW_PAGE_THRESHOLD
+)
 
 def generate_report(metrics, score, rating, penalties, filename):
 
@@ -67,8 +70,8 @@ def generate_report(metrics, score, rating, penalties, filename):
 
         f.write("## 📄 Title Tags\n")
         f.write(f"- Pages without Title: {len(titles['no_title'])}\n")
-        f.write(f"- Too Short (<30): {len(titles['short'])}\n")
-        f.write(f"- Too Long (>60): {len(titles['long'])}\n")
+        f.write(f"- Too Short (<{TITLE_MIN_LENGTH}): {len(titles['short'])}\n")
+        f.write(f"- Too Long (>{TITLE_MAX_LENGTH}): {len(titles['long'])}\n")
         f.write(f"- Duplicate Title Groups: {len(titles['duplicates'])}\n")
 
         if titles['no_title']:
@@ -84,20 +87,20 @@ def generate_report(metrics, score, rating, penalties, filename):
                     f.write(f"- {url}\n")
 
         if titles['short']:
-            f.write("\n**Titles Too Short (<30 chars):**\n")
+            f.write(f"\n**Titles Too Short (<{TITLE_MIN_LENGTH} chars):**\n")
             for url in titles['short']:
                 f.write(f"- {url}\n")
 
         if titles['long']:
-             f.write("\n**Titles Too Long (>60 chars):**\n")
+             f.write(f"\n**Titles Too Long (>{TITLE_MAX_LENGTH} chars):**\n")
              for url in titles['long']:
                  f.write(f"- {url}\n")
         f.write("\n")
 
         f.write("## 📝 Meta Descriptions\n")
         f.write(f"- Missing: {len(meta['no_meta'])}\n")
-        f.write(f"- Too Short (<120): {len(meta['short'])}\n")
-        f.write(f"- Too Long (>160): {len(meta['long'])}\n")
+        f.write(f"- Too Short (<{META_DESC_MIN_LENGTH}): {len(meta['short'])}\n")
+        f.write(f"- Too Long (>{META_DESC_MAX_LENGTH}): {len(meta['long'])}\n")
         f.write(f"- Duplicate Meta Groups: {len(meta['duplicates'])}\n")
 
         if meta['no_meta']:
@@ -115,12 +118,12 @@ def generate_report(metrics, score, rating, penalties, filename):
                     f.write(f"- {url}\n")
 
         if meta['short']:
-            f.write("\n**Meta Descriptions Too Short (<120 chars):**\n")
+            f.write(f"\n**Meta Descriptions Too Short (<{META_DESC_MIN_LENGTH} chars):**\n")
             for url in meta['short']:
                 f.write(f"- {url}\n")
 
         if meta['long']:
-            f.write("\n**Meta Descriptions Too Long (>160 chars):**\n")
+            f.write(f"\n**Meta Descriptions Too Long (>{META_DESC_MAX_LENGTH} chars):**\n")
             for url in meta['long']:
                 f.write(f"- {url}\n")
         f.write("\n")
@@ -165,12 +168,12 @@ def generate_report(metrics, score, rating, penalties, filename):
 
         f.write("## ⚡ Performance & Other\n")
         f.write(f"- Average Response Time: {others['performance']['avg_time']:.2f}s\n")
-        f.write(f"- Slow Pages (>3s): {len(others['performance']['slow_pages'])}\n")
+        f.write(f"- Slow Pages (>{SLOW_PAGE_THRESHOLD}s): {len(others['performance']['slow_pages'])}\n")
         f.write(f"- Pages with Schema: {others['schema']['present']}\n")
         f.write(f"- Pages with OG Image: {others['og']['image']}\n")
 
         if others['performance']['slow_pages']:
-            f.write("\n**Slow Pages (>3s):**\n")
+            f.write(f"\n**Slow Pages (>{SLOW_PAGE_THRESHOLD}s):**\n")
             for url in others['performance']['slow_pages']:
                 f.write(f"- {url}\n")
 

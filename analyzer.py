@@ -1,7 +1,12 @@
 import pandas as pd
 import logging
 from utils import to_list
-from config import CRITICAL_THRESHOLD, WARNING_THRESHOLD
+from config import (
+    CRITICAL_THRESHOLD, WARNING_THRESHOLD,
+    TITLE_MIN_LENGTH, TITLE_MAX_LENGTH,
+    META_DESC_MIN_LENGTH, META_DESC_MAX_LENGTH,
+    SLOW_PAGE_THRESHOLD
+)
 
 def load_data(crawl_file):
     """Loads crawled data into a DataFrame."""
@@ -83,8 +88,8 @@ def analyze_titles(df):
     no_title = df[df['title'].isna() | (df['title'] == '')]['url'].tolist()
 
     # Length checks
-    short_titles = df[df['title'].str.len() < 30]['url'].tolist()
-    long_titles = df[df['title'].str.len() > 60]['url'].tolist()
+    short_titles = df[df['title'].str.len() < TITLE_MIN_LENGTH]['url'].tolist()
+    long_titles = df[df['title'].str.len() > TITLE_MAX_LENGTH]['url'].tolist()
 
     duplicates = df[df.duplicated(subset=['title'], keep=False) & df['title'].notna() & (df['title'] != '')]
     duplicate_groups = duplicates.groupby('title')['url'].apply(list).to_dict()
@@ -108,8 +113,8 @@ def analyze_meta_desc(df):
 
     no_meta = df[df[col_name].isna() | (df[col_name] == '')]['url'].tolist()
 
-    short_meta = df[df[col_name].str.len() < 120]['url'].tolist()
-    long_meta = df[df[col_name].str.len() > 160]['url'].tolist()
+    short_meta = df[df[col_name].str.len() < META_DESC_MIN_LENGTH]['url'].tolist()
+    long_meta = df[df[col_name].str.len() > META_DESC_MAX_LENGTH]['url'].tolist()
 
     duplicates = df[df.duplicated(subset=[col_name], keep=False) & df[col_name].notna() & (df[col_name] != '')]
     duplicate_groups = duplicates.groupby(col_name)['url'].apply(list).to_dict()
@@ -233,7 +238,7 @@ def analyze_others(df):
 
     # Performance
     if 'download_latency' in df.columns:
-        slow_pages = df[df['download_latency'] > 3]['url'].tolist()
+        slow_pages = df[df['download_latency'] > SLOW_PAGE_THRESHOLD]['url'].tolist()
         avg_time = df['download_latency'].mean()
     else:
         slow_pages = []
