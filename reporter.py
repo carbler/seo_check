@@ -19,191 +19,128 @@ class SEOReporter(ABC):
         pass
 
 class MarkdownReporter(SEOReporter):
-    """Generates a Markdown report."""
+    """Generates a Markdown report in a Semrush-style audit format."""
 
     def generate(self):
         filename = self.config.report_file
+        issues = self.metrics.get('issues', {'errors': [], 'warnings': [], 'notices': []})
         http = self.metrics['http']
-        h1 = self.metrics['h1']
-        titles = self.metrics['title']
-        meta = self.metrics['meta']
-        canonical = self.metrics['canonical']
-        images = self.metrics['images']
-        links = self.metrics['links']
-        security = self.metrics['security']
-        others = self.metrics['others']
 
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f"# 🔍 TuWorker.com - Technical SEO Analysis\n")
+            # HEADER
+            f.write(f"# 🔍 TuWorker.com - Site Audit Report\n")
             f.write(f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  \n")
-            f.write(f"**Base URL**: {self.config.base_url}  \n")
-            f.write(f"**Pages Analyzed**: {http['total']}\n\n")
-            f.write(f"---\n\n")
+            f.write(f"**Base URL**: {self.config.base_url}\n\n")
 
-            f.write(f"## 📊 Executive Summary\n\n")
-            f.write(f"**SEO SCORE: {self.score:.1f}/100 - {self.rating}**\n\n")
+            # DASHBOARD / EXECUTIVE SUMMARY
+            f.write("## 📊 Executive Dashboard\n\n")
+            f.write(f"### Site Health Score: {self.score:.0f}/100 ({self.rating})\n")
+            f.write(f"**Pages Crawled:** {http['total']}  \n")
 
-            f.write("### Key Metrics\n")
-            f.write("| Metric | Value | Status |\n")
-            f.write("|--------|-------|--------|\n")
-            f.write(f"| Total URLs | {http['total']} | - |\n")
-            f.write(f"| OK Pages (200) | {http.get('stats', {}).get(200, 0)} | {'✅' if http['error_rate_4xx'] < self.config.critical_threshold else '⚠️'} |\n")
-            f.write(f"| Broken Links (4xx) | {len(http['broken_links'])} | {'✅' if http['error_rate_4xx'] < self.config.critical_threshold else '❌'} {http['error_rate_4xx']:.1f}% |\n")
-            f.write(f"| With H1 | {h1['total'] - len(h1['no_h1'])} | {100-h1['missing_pct']:.1f}% |\n")
-            f.write(f"| With Title | {titles['total'] - len(titles['no_title'])} | {100-titles['missing_pct']:.1f}% |\n")
-            f.write(f"| With Meta Desc | {meta['total'] - len(meta['no_meta'])} | {100-meta['missing_pct']:.1f}% |\n")
-            f.write(f"| Images w/ Alt | {images['total_images'] - images['missing_alt_count']} | {100-images['missing_pct']:.1f}% |\n")
-            f.write(f"| Secure (HTTPS) | {len(security['non_https'])} non-https | {security['secure_pct']:.1f}% |\n\n")
+            # Issue Counts
+            total_errors = sum(i['count'] for i in issues['errors'])
+            total_warnings = sum(i['count'] for i in issues['warnings'])
+            total_notices = sum(i['count'] for i in issues['notices'])
 
-            f.write("### Score Penalties\n")
-            for p in self.penalties:
-                f.write(f"- {p}\n")
+            f.write("| 🔴 Errors | ⚠️ Warnings | 🔵 Notices |\n")
+            f.write("|:---:|:---:|:---:|\n")
+            f.write(f"| **{total_errors}** | **{total_warnings}** | **{total_notices}** |\n\n")
+
+            # TOP ISSUES
+            f.write("### 🏆 Top Issues\n")
+            all_issues = []
+            for i in issues['errors']: all_issues.append((i['count'], "🔴 " + i['name']))
+            for i in issues['warnings']: all_issues.append((i['count'], "⚠️ " + i['name']))
+            # Sort by count desc
+            all_issues.sort(key=lambda x: x[0], reverse=True)
+
+            if all_issues:
+                for count, name in all_issues[:5]:
+                    f.write(f"- **{count}** pages with {name}\n")
+            else:
+                f.write("No major issues found! 🎉\n")
             f.write("\n---\n\n")
 
-            # --- Detailed Sections ---
-            self._write_section(f, "🔴 Broken Links (4xx)", http['broken_links'],
-                              lambda x: f"- {x['url']} ({x['status']})")
+            # THEMATIC REPORT: CRAWLABILITY
+            f.write("## 🕷️ Crawlability & Site Architecture\n")
+            f.write(f"- **HTTP Status:** 200 OK ({http['stats'].get(200, 0)}) | Redirects ({len(http['redirects'])}) | Errors ({len(http['broken_links']) + len(http['server_errors'])})\n")
 
-            self._write_h1_section(f, h1)
-            self._write_titles_section(f, titles)
-            self._write_meta_section(f, meta)
+            if 'urls' in self.metrics['others']:
+                depth_dist = self.metrics['others']['urls'].get('depth_dist', {})
+                f.write(f"- **Crawl Depth:** Avg: {self.metrics['others']['urls']['avg_depth']:.1f} | Max: {self.metrics['others']['urls']['max_depth']}\n")
+                # Simple depth chart
+                # f.write("  - Depth Distribution: " + ", ".join([f"L{k}:{v}" for k,v in depth_dist.items()]) + "\n")
 
-            f.write("## 🔗 Links Structure\n")
-            f.write(f"- Internal Links: {links['internal']}\n")
-            f.write(f"- External Links: {links['external']}\n")
-            f.write(f"- Internal/External Ratio: {links['ratio']:.2f}\n")
+            if http['broken_links']:
+                self._write_expandable_section(f, "Broken Links (4xx)", http['broken_links'], lambda x: f"- {x['url']} ({x['status']})")
+            if http['redirects']:
+                self._write_expandable_section(f, "Redirects (3xx)", http['redirects'], lambda x: f"- {x['url']} ({x['status']})")
+
             f.write("\n")
 
-            self._write_section(f, "🔒 Security (Non-HTTPS)", security['non_https'],
-                              lambda x: f"- {x}")
+            # THEMATIC REPORT: ON-PAGE SEO
+            f.write("## 📄 On-Page SEO\n")
+            self._write_issue_group(f, issues, ['Duplicate Titles', 'Missing Titles', 'Titles Too Long', 'Titles Too Short'])
+            self._write_issue_group(f, issues, ['Missing H1 Tags', 'Duplicate H1 Content'])
+            self._write_issue_group(f, issues, ['Missing Meta Descriptions', 'Duplicate Meta Descriptions', 'Meta Desc Too Short', 'Meta Desc Too Long'])
+            f.write("\n")
 
-            self._write_canonical_section(f, canonical)
-            self._write_images_section(f, images)
+            # THEMATIC REPORT: TECHNICAL & PERFORMANCE
+            f.write("## ⚡ Technical & Performance\n")
+            perf = self.metrics['others']['performance']
+            f.write(f"- **Avg Load Time:** {perf['avg_time']:.2f}s\n")
+            f.write(f"- **HTTPS:** {len(self.metrics['security']['non_https'])} non-secure pages\n")
 
-            f.write("## ⚡ Performance & Other\n")
-            f.write(f"- Average Response Time: {others['performance']['avg_time']:.2f}s\n")
-            f.write(f"- Pages with Schema: {others['schema']['present']}\n")
-            f.write(f"- Pages with OG Image: {others['og']['image']}\n")
+            self._write_issue_group(f, issues, ['Slow Load Time', 'Non-HTTPS Pages', 'Images Missing Alt Text'])
+            f.write("\n")
 
-            if others['performance']['slow_pages']:
-                f.write(f"\n**Slow Pages (>{self.config.slow_page_threshold}s):**\n")
-                for url in others['performance']['slow_pages']:
-                    f.write(f"- {url}\n")
+            # THEMATIC REPORT: INTERNAL LINKING
+            f.write("## 🔗 Internal Linking\n")
+            links = self.metrics['links']
+            f.write(f"- **Internal Links:** {links['internal']}\n")
+            f.write(f"- **External Links:** {links['external']}\n")
+            f.write(f"- **Ratio:** {links['ratio']:.2f}\n")
+            f.write("\n")
 
         print(f"✓ Report generated: {filename}")
 
-    def _write_section(self, f, title, items, format_func):
-        f.write(f"## {title}\n")
-        if items:
-            for item in items:
-                f.write(f"{format_func(item)}\n")
+    def _write_issue_group(self, f, issues, names_to_print):
+        """Helper to print specific issues found in the metrics."""
+        found = False
+        # Search in all categories
+        for category in ['errors', 'warnings', 'notices']:
+            for issue in issues[category]:
+                if issue['name'] in names_to_print:
+                    found = True
+                    self._write_expandable_section(f, issue['name'], issue['items'], self._default_formatter(issue['name']))
+
+    def _default_formatter(self, issue_name):
+        """Returns a formatter function based on the issue type."""
+        if 'Duplicate' in issue_name:
+            # Expects dict {text: [urls]}
+            return lambda item: f"**\"{item[0]}\"**\n" + "".join([f"  - {u}\n" for u in item[1]])
+        elif 'Images' in issue_name:
+             # Expects dict {url, count}
+            return lambda item: f"- {item['url']} ({item['count']} images)"
         else:
-            f.write("None detected ✅\n")
-        f.write("\n")
+            # Expects strings or simple dicts with url
+            return lambda item: f"- {item if isinstance(item, str) else item.get('url', item)}"
 
-    def _write_h1_section(self, f, h1):
-        f.write("## 🔤 H1 Tags\n")
-        f.write(f"- Pages without H1: {len(h1['no_h1'])}\n")
-        f.write(f"- Duplicate H1 Groups: {len(h1['duplicate_h1'])}\n")
+    def _write_expandable_section(self, f, title, items, format_func):
+        if not items: return
 
-        if h1['no_h1']:
-            f.write("\n**Pages without H1:**\n")
-            for url in h1['no_h1']:
-                f.write(f"- {url}\n")
+        # If items is a dict (duplicates), convert to list of tuples for length check
+        count = len(items)
 
-        if h1['duplicate_h1']:
-            f.write("\n**Duplicate H1 Groups:**\n")
-            for h1_text, urls in h1['duplicate_h1'].items():
-                f.write(f"\n**\"{h1_text}\"** used on:\n")
-                for url in urls:
-                    f.write(f"- {url}\n")
-        f.write("\n")
+        f.write(f"### {title} ({count})\n")
+        # For duplicates (dict), we iterate items()
+        if isinstance(items, dict):
+            iterator = items.items()
+        else:
+            iterator = items
 
-    def _write_titles_section(self, f, titles):
-        f.write("## 📄 Title Tags\n")
-        f.write(f"- Pages without Title: {len(titles['no_title'])}\n")
-        f.write(f"- Too Short (<{self.config.title_min_length}): {len(titles['short'])}\n")
-        f.write(f"- Too Long (>{self.config.title_max_length}): {len(titles['long'])}\n")
-        f.write(f"- Duplicate Title Groups: {len(titles['duplicates'])}\n")
-
-        if titles['no_title']:
-            f.write("\n**Pages without Title:**\n")
-            for url in titles['no_title']:
-                f.write(f"- {url}\n")
-
-        if titles['duplicates']:
-            f.write("\n**Duplicate Title Groups:**\n")
-            for txt, urls in titles['duplicates'].items():
-                f.write(f"\n**\"{txt}\"** used on:\n")
-                for url in urls:
-                    f.write(f"- {url}\n")
-
-        if titles['short']:
-            f.write(f"\n**Titles Too Short:**\n")
-            for url in titles['short']:
-                f.write(f"- {url}\n")
-
-        if titles['long']:
-             f.write(f"\n**Titles Too Long:**\n")
-             for url in titles['long']:
-                 f.write(f"- {url}\n")
-        f.write("\n")
-
-    def _write_meta_section(self, f, meta):
-        f.write("## 📝 Meta Descriptions\n")
-        f.write(f"- Missing: {len(meta['no_meta'])}\n")
-        f.write(f"- Too Short (<{self.config.meta_desc_min_length}): {len(meta['short'])}\n")
-        f.write(f"- Too Long (>{self.config.meta_desc_max_length}): {len(meta['long'])}\n")
-        f.write(f"- Duplicate Meta Groups: {len(meta['duplicates'])}\n")
-
-        if meta['no_meta']:
-            f.write("\n**Pages without Meta Description:**\n")
-            for url in meta['no_meta']:
-                f.write(f"- {url}\n")
-
-        if meta['duplicates']:
-            f.write("\n**Duplicate Meta Groups:**\n")
-            for txt, urls in meta['duplicates'].items():
-                display = (txt[:75] + '...') if len(txt) > 75 else txt
-                f.write(f"\n**\"{display}\"** used on:\n")
-                for url in urls:
-                    f.write(f"- {url}\n")
-
-        if meta['short']:
-            f.write(f"\n**Meta Too Short:**\n")
-            for url in meta['short']:
-                f.write(f"- {url}\n")
-
-        if meta['long']:
-            f.write(f"\n**Meta Too Long:**\n")
-            for url in meta['long']:
-                f.write(f"- {url}\n")
-        f.write("\n")
-
-    def _write_canonical_section(self, f, canonical):
-        f.write("## 🔄 Canonical Tags\n")
-        f.write(f"- Missing: {len(canonical['no_canonical'])}\n")
-        f.write(f"- Different: {len(canonical['diff'])}\n")
-
-        if canonical['no_canonical']:
-            f.write("\n**Pages without Canonical:**\n")
-            for url in canonical['no_canonical']:
-                f.write(f"- {url}\n")
-
-        if canonical['diff']:
-            f.write("\n**Canonical points to different URL:**\n")
-            for item in canonical['diff']:
-                f.write(f"- {item['url']} -> {item['canonical']}\n")
-        f.write("\n")
-
-    def _write_images_section(self, f, images):
-        f.write("## 🖼️ Images\n")
-        f.write(f"- Total Images: {images['total_images']}\n")
-        f.write(f"- Missing Alt: {images['missing_alt_count']} ({images['missing_pct']:.1f}%)\n")
-        if images['missing_alt_details']:
-            f.write("\n**Pages with missing Alt:**\n")
-            for item in images['missing_alt_details']:
-                f.write(f"- {item['url']} ({item['count']} images)\n")
+        for item in iterator:
+            f.write(f"{format_func(item)}\n")
         f.write("\n")
 
 
@@ -212,36 +149,14 @@ class HTMLReporter(SEOReporter):
 
     def generate(self):
         filename = self.config.report_file
-        # Simplified HTML generation logic
+        # Simplified HTML generation logic (keeping generic for now)
         html_content = f"""
         <html>
-        <head><title>SEO Report - {self.config.base_url}</title>
-        <style>body {{ font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
-               h1, h2 {{ color: #333; }}
-               .score {{ font-size: 2em; font-weight: bold; color: #2c3e50; }}
-               .warning {{ color: orange; }} .critical {{ color: red; }} .good {{ color: green; }}
-        </style>
-        </head>
+        <head><title>SEO Audit - {self.config.base_url}</title></head>
         <body>
-            <h1>🔍 SEO Analysis for {self.config.base_url}</h1>
-            <p><strong>Date:</strong> {datetime.now()}</p>
-            <div class="score">Score: {self.score:.1f}/100 - {self.rating}</div>
-
-            <h2>📊 Executive Summary</h2>
-            <p>Total URLs: {self.metrics['http']['total']}</p>
-
-            <h3>Penalties</h3>
-            <ul>
-                {''.join(f'<li>{p}</li>' for p in self.penalties)}
-            </ul>
-
-            <h2>🔴 Broken Links</h2>
-            <ul>
-                {''.join(f"<li>{x['url']} ({x['status']})</li>" for x in self.metrics['http']['broken_links']) or '<li>None</li>'}
-            </ul>
-
-            <!-- More sections could be added here similar to MD -->
-
+            <h1>SEO Audit: {self.config.base_url}</h1>
+            <h2>Score: {self.score}/100</h2>
+            <p>Check the Markdown report for detailed Semrush-style analysis.</p>
         </body>
         </html>
         """
@@ -256,7 +171,6 @@ class JSONReporter(SEOReporter):
     def generate(self):
         filename = self.config.report_file
 
-        # Convert NumPy types to native Python types for JSON serialization
         def convert_numpy(obj):
             if hasattr(obj, 'item'):
                 return obj.item()

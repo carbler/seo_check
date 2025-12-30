@@ -30,23 +30,30 @@ class SEOAnalyzer:
         metrics['links'] = self._analyze_links(df)
         metrics['security'] = self._analyze_security(df)
         metrics['others'] = self._analyze_others(df)
+
+        # New Semrush-style categorizations
+        metrics['issues'] = self._categorize_issues(metrics)
+
         return metrics
 
     def _analyze_http_status(self, df):
         total = len(df)
         if 'status' not in df.columns:
-             return {'stats': {}, 'errors': []}
+             return {'stats': {}, 'errors': [], 'redirects': []}
 
         stats = df['status'].value_counts()
 
+        redirects_3xx = df[df['status'].between(300, 399)]
         errors_4xx = df[df['status'].between(400, 499)]
         errors_5xx = df[df['status'].between(500, 599)]
 
+        redirect_list = redirects_3xx[['url', 'status']].to_dict('records')
         broken_links = errors_4xx[['url', 'status']].to_dict('records')
         server_errors = errors_5xx[['url', 'status']].to_dict('records')
 
         return {
             'stats': stats.to_dict(),
+            'redirects': redirect_list,
             'broken_links': broken_links,
             'server_errors': server_errors,
             'total': total,
@@ -245,20 +252,73 @@ class SEOAnalyzer:
             'avg_time': avg_time
         }
 
+        # URL Depth Analysis
         if 'url' in df.columns:
             df['depth'] = df['url'].astype(str).apply(lambda x: x.count('/'))
             avg_depth = df['depth'].mean()
             max_depth = df['depth'].max()
+            depth_dist = df['depth'].value_counts().sort_index().to_dict()
         else:
             avg_depth = 0
             max_depth = 0
+            depth_dist = {}
 
         results['urls'] = {
             'avg_depth': avg_depth,
-            'max_depth': max_depth
+            'max_depth': max_depth,
+            'depth_dist': depth_dist
         }
 
         return results
+
+    def _categorize_issues(self, metrics):
+        """Categorize findings into Errors, Warnings, and Notices."""
+        errors = []
+        warnings = []
+        notices = []
+
+        # Errors (Critical)
+        if metrics['http']['broken_links']:
+            errors.append({'name': 'Broken Links (4xx)', 'count': len(metrics['http']['broken_links']), 'items': metrics['http']['broken_links']})
+        if metrics['http']['server_errors']:
+            errors.append({'name': 'Server Errors (5xx)', 'count': len(metrics['http']['server_errors']), 'items': metrics['http']['server_errors']})
+        if metrics['title']['duplicates']:
+            errors.append({'name': 'Duplicate Titles', 'count': len(metrics['title']['duplicates']), 'items': metrics['title']['duplicates']})
+        if metrics['security']['non_https']:
+            errors.append({'name': 'Non-HTTPS Pages', 'count': len(metrics['security']['non_https']), 'items': metrics['security']['non_https']})
+
+        # Warnings (Important)
+        if metrics['h1']['no_h1']:
+            warnings.append({'name': 'Missing H1 Tags', 'count': len(metrics['h1']['no_h1']), 'items': metrics['h1']['no_h1']})
+        if metrics['h1']['duplicate_h1']:
+            warnings.append({'name': 'Duplicate H1 Content', 'count': len(metrics['h1']['duplicate_h1']), 'items': metrics['h1']['duplicate_h1']})
+        if metrics['meta']['no_meta']:
+            warnings.append({'name': 'Missing Meta Descriptions', 'count': len(metrics['meta']['no_meta']), 'items': metrics['meta']['no_meta']})
+        if metrics['meta']['duplicates']:
+            warnings.append({'name': 'Duplicate Meta Descriptions', 'count': len(metrics['meta']['duplicates']), 'items': metrics['meta']['duplicates']})
+        if metrics['title']['no_title']:
+            warnings.append({'name': 'Missing Titles', 'count': len(metrics['title']['no_title']), 'items': metrics['title']['no_title']})
+        if metrics['title']['long']:
+            warnings.append({'name': 'Titles Too Long', 'count': len(metrics['title']['long']), 'items': metrics['title']['long']})
+        if metrics['images']['missing_alt_details']:
+            warnings.append({'name': 'Images Missing Alt Text', 'count': metrics['images']['missing_alt_count'], 'items': metrics['images']['missing_alt_details']})
+        if metrics['others']['performance']['slow_pages']:
+            warnings.append({'name': 'Slow Load Time', 'count': len(metrics['others']['performance']['slow_pages']), 'items': metrics['others']['performance']['slow_pages']})
+
+        # Notices (Info/Optimization)
+        if metrics['http']['redirects']:
+            notices.append({'name': 'Redirects (3xx)', 'count': len(metrics['http']['redirects']), 'items': metrics['http']['redirects']})
+        if metrics['title']['short']:
+            notices.append({'name': 'Titles Too Short', 'count': len(metrics['title']['short']), 'items': metrics['title']['short']})
+        if metrics['meta']['short']:
+            notices.append({'name': 'Meta Desc Too Short', 'count': len(metrics['meta']['short']), 'items': metrics['meta']['short']})
+        if metrics['meta']['long']:
+            notices.append({'name': 'Meta Desc Too Long', 'count': len(metrics['meta']['long']), 'items': metrics['meta']['long']})
+        if metrics['canonical']['no_canonical']:
+            notices.append({'name': 'Missing Canonical', 'count': len(metrics['canonical']['no_canonical']), 'items': metrics['canonical']['no_canonical']})
+
+        return {'errors': errors, 'warnings': warnings, 'notices': notices}
+
 
 class SEOScorer:
     """Calculates the SEO score based on analysis metrics."""

@@ -2,7 +2,11 @@
 tuworker_crawl_*.jl
 tuworker_crawl_*.log
 tuworker_report_*.md
+tuworker_report_*.json
+tuworker_report_*.html
+reports/
 
 # Python
 __pycache__/
 *.pyc
+myvenv/

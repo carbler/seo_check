@@ -12,8 +12,16 @@ class SEOApplication:
     def __init__(self):
         self.config = SEOConfig()
 
+    def setup_workspace(self):
+        """Creates necessary directories."""
+        if not os.path.exists(self.config.output_dir):
+            os.makedirs(self.config.output_dir)
+            print(f"📁 Created output directory: {self.config.output_dir}")
+
     def run(self):
         """Runs the complete SEO analysis workflow."""
+        self.setup_workspace()
+
         setup_logging(self.config.log_file)
         print_header()
 
@@ -21,6 +29,7 @@ class SEOApplication:
         print_section("STEP 1: CRAWLING")
         crawler = SEOCrawler(self.config)
 
+        # Check if crawl file already exists in this specific timestamped folder (unlikely unless rerun)
         if os.path.exists(self.config.crawl_file):
             print(f"⚠️  Crawl file {self.config.crawl_file} already exists. Using existing file.")
             crawl_output = self.config.crawl_file
@@ -60,10 +69,10 @@ class SEOApplication:
         print("\n" + "="*60)
         print("✨ ANALYSIS COMPLETED SUCCESSFULLY")
         print("="*60 + "\n")
-        print(f"📁 Files generated:")
-        print(f"   • Report: {self.config.report_file}")
-        print(f"   • Data:   {self.config.crawl_file}")
-        print(f"   • Log:    {self.config.log_file}\n")
+        print(f"📁 Files generated in: {self.config.output_dir}")
+        print(f"   • Report: {os.path.basename(self.config.report_file)}")
+        print(f"   • Data:   {os.path.basename(self.config.crawl_file)}")
+        print(f"   • Log:    {os.path.basename(self.config.log_file)}\n")
 
 if __name__ == "__main__":
     app = SEOApplication()

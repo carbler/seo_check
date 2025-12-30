@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from dataclasses import dataclass, field
 
@@ -36,20 +37,24 @@ class SEOConfig:
     ga_view_id: str = ''
 
     # Output Configuration
-    output_format: str = 'json'  # options: 'md', 'html', 'json'
+    output_format: str = 'md'  # options: 'md', 'html', 'json'
 
     # Dynamic Filenames
     timestamp: str = field(default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))
 
     @property
+    def output_dir(self) -> str:
+        return os.path.join('reports', self.timestamp)
+
+    @property
     def crawl_file(self) -> str:
-        return f'tuworker_crawl_{self.timestamp}.jl'
+        return os.path.join(self.output_dir, f'tuworker_crawl_{self.timestamp}.jl')
 
     @property
     def log_file(self) -> str:
-        return f'tuworker_crawl_{self.timestamp}.log'
+        return os.path.join(self.output_dir, f'tuworker_crawl_{self.timestamp}.log')
 
     @property
     def report_file(self) -> str:
         ext = self.output_format.lower()
-        return f'tuworker_report_{self.timestamp}.{ext}'
+        return os.path.join(self.output_dir, f'tuworker_report_{self.timestamp}.{ext}')
