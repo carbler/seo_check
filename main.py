@@ -1,10 +1,17 @@
 import os
 import sys
+from rich.console import Console
+from rich.prompt import Prompt, IntPrompt, Confirm
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
 from config import SEOConfig
-from utils import setup_logging, print_header, print_section
+from utils import setup_logging
 from crawler import SEOCrawler
 from analyzer import SEOAnalyzer, SEOScorer
 from reporter import ReporterFactory
+
+console = Console()
 
 class SEOApplication:
     """Main application facade for the SEO Analyzer."""
@@ -16,63 +23,86 @@ class SEOApplication:
         """Creates necessary directories."""
         if not os.path.exists(self.config.output_dir):
             os.makedirs(self.config.output_dir)
-            print(f"📁 Created output directory: {self.config.output_dir}")
+
+    def get_user_input(self):
+        """Interactive CLI for configuration."""
+        console.print(Panel.fit("[bold blue]TuWorker SEO Analyzer v2.0[/bold blue]", border_style="blue"))
+
+        self.config.base_url = Prompt.ask("[bold green]Enter Target URL[/bold green]", default="https://tuworker.com")
+        self.config.max_depth = IntPrompt.ask("[bold green]Max Crawl Depth[/bold green]", default=3)
+
+        # Determine sitemap automatically if possible
+        if not self.config.sitemap_url:
+            self.config.sitemap_url = self.config.base_url.rstrip('/') + '/sitemap.xml'
 
     def run(self):
         """Runs the complete SEO analysis workflow."""
-        self.setup_workspace()
+        try:
+            self.get_user_input()
+            self.setup_workspace()
+            setup_logging(self.config.log_file)
 
-        setup_logging(self.config.log_file)
-        print_header()
+            console.print(f"\n[dim]Output directory: {self.config.output_dir}[/dim]\n")
 
-        # 1. Crawl
-        print_section("STEP 1: CRAWLING")
-        crawler = SEOCrawler(self.config)
+            # 1. Crawl
+            crawl_output = None
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+                task = progress.add_task("[cyan]Crawling website...", total=None)
+                crawler = SEOCrawler(self.config)
+                crawl_output = crawler.execute()
 
-        # Check if crawl file already exists in this specific timestamped folder (unlikely unless rerun)
-        if os.path.exists(self.config.crawl_file):
-            print(f"⚠️  Crawl file {self.config.crawl_file} already exists. Using existing file.")
-            crawl_output = self.config.crawl_file
-        else:
-            crawl_output = crawler.execute()
+            if not crawl_output:
+                console.print("[bold red]❌ Crawl failed or returned no data. Check logs.[/bold red]")
+                return
 
-        if not crawl_output:
-            print("❌ Crawl failed or returned no data. Exiting.")
-            return
+            console.print("[green]✓ Crawl completed[/green]")
 
-        # 2. Analyze
-        print_section("STEP 2: ANALYSIS")
-        analyzer = SEOAnalyzer(self.config)
-        df = analyzer.load_data(crawl_output)
+            # 2. Analyze
+            df = None
+            analyzer = SEOAnalyzer(self.config)
 
-        if df is None or len(df) == 0:
-            print("❌ No data found in crawl file.")
-            return
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+                task = progress.add_task("[cyan]Loading data...", total=None)
+                df = analyzer.load_data(crawl_output)
 
-        print(f"✓ Loaded {len(df)} pages for analysis.")
+            if df is None or len(df) == 0:
+                console.print("[bold red]❌ No data found in crawl file.[/bold red]")
+                return
 
-        # Perform analysis
-        print("• Running analysis modules...")
-        metrics = analyzer.analyze(df)
+            console.print(f"[green]✓ Loaded {len(df)} pages[/green]")
 
-        # 3. Score
-        print_section("STEP 3: SEO SCORE")
-        scorer = SEOScorer(self.config)
-        score, rating, penalties = scorer.calculate(metrics)
-        print(f"🎯 GLOBAL SEO SCORE: {score:.1f}/100 - {rating}")
+            metrics = None
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+                task = progress.add_task("[cyan]Analyzing SEO metrics...", total=None)
+                metrics = analyzer.analyze(df)
 
-        # 4. Report
-        print_section(f"STEP 4: REPORT GENERATION ({self.config.output_format.upper()})")
-        reporter = ReporterFactory.create_reporter(self.config, metrics, score, rating, penalties)
-        reporter.generate()
+            console.print("[green]✓ Analysis complete[/green]")
 
-        print("\n" + "="*60)
-        print("✨ ANALYSIS COMPLETED SUCCESSFULLY")
-        print("="*60 + "\n")
-        print(f"📁 Files generated in: {self.config.output_dir}")
-        print(f"   • Report: {os.path.basename(self.config.report_file)}")
-        print(f"   • Data:   {os.path.basename(self.config.crawl_file)}")
-        print(f"   • Log:    {os.path.basename(self.config.log_file)}\n")
+            # 3. Score
+            scorer = SEOScorer(self.config)
+            score, rating, penalties = scorer.calculate(metrics)
+
+            # 4. Report
+            reporter = ReporterFactory.create_reporter(self.config, metrics, score, rating, penalties)
+            reporter.generate()
+
+            # Final Summary
+            console.print("\n[bold]✨ Analysis Finished![/bold]")
+            console.print(Panel(f"""
+[bold]Score:[/bold] {score:.1f}/100 ({rating})
+[bold]Pages:[/bold] {metrics['http']['total']}
+[bold]Report:[/bold] {self.config.report_file}
+            """, title="Summary", border_style="green"))
+
+            console.print("\n[bold yellow]👉 Open 'viewer.html' in your browser and load the generated JSON file to view the report.[/bold yellow]\n")
+
+        except KeyboardInterrupt:
+            console.print("\n[bold red]Operation cancelled by user.[/bold red]")
+            sys.exit(0)
+        except Exception as e:
+            console.print(f"\n[bold red]Unexpected Error:[/bold red] {e}")
+            logging.exception("Fatal error")
+            sys.exit(1)
 
 if __name__ == "__main__":
     app = SEOApplication()
