@@ -22,7 +22,6 @@ app = FastAPI(title="TuWorker SEO Analyzer")
 REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(exist_ok=True)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # --- Service Logic ---
