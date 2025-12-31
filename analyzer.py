@@ -21,6 +21,11 @@ class SEOAnalyzer:
     def analyze(self, df: pd.DataFrame) -> dict:
         """Performs comprehensive analysis on the dataframe."""
         metrics = {}
+
+        # Guard clause for empty dataframe or missing URL column
+        if df.empty or 'url' not in df.columns:
+            return self._get_empty_metrics()
+
         metrics['http'] = self._analyze_http_status(df)
         metrics['h1'] = self._analyze_h1_tags(df)
         metrics['title'] = self._analyze_titles(df)
@@ -41,7 +46,15 @@ class SEOAnalyzer:
     def _analyze_http_status(self, df):
         total = len(df)
         if 'status' not in df.columns:
-             return {'stats': {}, 'errors': [], 'redirects': []}
+             return {
+                 'stats': {},
+                 'redirects': [],
+                 'broken_links': [],
+                 'server_errors': [],
+                 'total': total,
+                 'error_rate_4xx': 0,
+                 'error_rate_5xx': 0
+             }
 
         stats = df['status'].value_counts()
 
@@ -66,7 +79,13 @@ class SEOAnalyzer:
     def _analyze_h1_tags(self, df):
         total = len(df)
         if 'h1' not in df.columns:
-            return {'no_h1': df['url'].tolist(), 'multiple_h1': [], 'duplicate_h1': [], 'total': total, 'missing_pct': 100}
+            return {
+                'no_h1': df['url'].tolist(),
+                'multiple_h1': [],
+                'duplicate_h1': {},
+                'total': total,
+                'missing_pct': 100
+            }
 
         no_h1 = []
         multiple_h1 = []
@@ -102,7 +121,15 @@ class SEOAnalyzer:
     def _analyze_titles(self, df):
         total = len(df)
         if 'title' not in df.columns:
-            return {'missing': total, 'short': [], 'long': [], 'duplicates': {}, 'total': total}
+            return {
+                'no_title': df['url'].tolist(),
+                'short': [],
+                'long': [],
+                'duplicates': {},
+                'total': total,
+                'missing_pct': 100,
+                'duplicate_pct': 0
+            }
 
         no_title = df[df['title'].isna() | (df['title'] == '')]['url'].tolist()
 
@@ -126,7 +153,14 @@ class SEOAnalyzer:
         total = len(df)
         col_name = 'meta_desc'
         if col_name not in df.columns:
-             return {'missing': total, 'short': [], 'long': [], 'duplicates': {}, 'total': total}
+             return {
+                 'no_meta': df['url'].tolist(),
+                 'short': [],
+                 'long': [],
+                 'duplicates': {},
+                 'total': total,
+                 'missing_pct': 100
+             }
 
         no_meta = df[df[col_name].isna() | (df[col_name] == '')]['url'].tolist()
 
@@ -148,7 +182,12 @@ class SEOAnalyzer:
     def _analyze_canonical(self, df):
         total = len(df)
         if 'canonical' not in df.columns:
-             return {'missing': [], 'diff': [], 'total': total}
+             return {
+                 'no_canonical': df['url'].tolist(),
+                 'diff': [],
+                 'total': total,
+                 'missing_pct': 100
+             }
 
         no_canonical = df[df['canonical'].isna()]['url'].tolist()
 
@@ -164,7 +203,12 @@ class SEOAnalyzer:
 
     def _analyze_images(self, df):
         if 'img_alt' not in df.columns:
-            return {'missing_alt_details': [], 'total_images': 0, 'missing_alt_count': 0, 'missing_pct': 0}
+            return {
+                'missing_alt_details': [],
+                'total_images': 0,
+                'missing_alt_count': 0,
+                'missing_pct': 0
+            }
 
         total_imgs = 0
         missing_alt_count = 0
@@ -304,6 +348,40 @@ class SEOAnalyzer:
             'low_word_count': low_word_count,
             'low_text_ratio': low_text_ratio
         }
+
+    def _get_empty_metrics(self):
+        """Returns empty structure to prevent crashes."""
+        empty_stats = {
+            'stats': {}, 'redirects': [], 'broken_links': [], 'server_errors': [],
+            'total': 0, 'error_rate_4xx': 0, 'error_rate_5xx': 0
+        }
+        empty_tags = {
+            'no_h1': [], 'multiple_h1': [], 'duplicate_h1': {}, 'total': 0, 'missing_pct': 0,
+            'no_title': [], 'short': [], 'long': [], 'duplicates': {}, 'duplicate_pct': 0,
+            'no_meta': [], 'no_canonical': [], 'diff': [],
+            'missing_alt_details': [], 'total_images': 0, 'missing_alt_count': 0
+        }
+        # Populate basic structure
+        metrics = {
+            'http': empty_stats,
+            'h1': empty_tags,
+            'title': empty_tags,
+            'meta': empty_tags,
+            'canonical': empty_tags,
+            'images': empty_tags,
+            'links': {'internal': 0, 'external': 0, 'ratio': 0},
+            'security': {'non_https': [], 'secure_pct': 0},
+            'others': {
+                'og': {'title': 0, 'desc': 0, 'image': 0, 'total': 0},
+                'schema': {'present': 0, 'total': 0},
+                'performance': {'slow_pages': [], 'avg_time': 0},
+                'urls': {'avg_depth': 0, 'max_depth': 0, 'depth_dist': {}}
+            },
+            'content': {'low_word_count': [], 'low_text_ratio': []},
+            'issues': {'errors': [], 'warnings': [], 'notices': []},
+            'page_details': {}
+        }
+        return metrics
 
     def _categorize_issues(self, metrics):
         """Categorize findings into Errors, Warnings, and Notices."""
