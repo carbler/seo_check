@@ -26,61 +26,87 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Service Logic ---
 
-def run_analysis_task(url: str, depth: int):
-    """Background task to run the full SEO analysis."""
-    # Create specific timestamp for this run
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+def update_job_status(output_dir, stage, percent, message):
+    """Updates the status.json file for the frontend poller."""
+    status_file = os.path.join(output_dir, "status.json")
+    data = {
+        "stage": stage,
+        "percent": percent,
+        "message": message,
+        "updated_at": str(datetime.now())
+    }
+    with open(status_file, 'w') as f:
+        json.dump(data, f)
 
+def run_analysis_task(url: str, depth: int, timestamp: str):
+    """Background task to run the full SEO analysis."""
     # Initialize Config manually for this run
     config = SEOConfig()
     config.base_url = url
     config.max_depth = depth
     config.timestamp = timestamp # Important: Override timestamp to keep consistency
 
-    # Ensure sitemap
-    if not config.sitemap_url and url:
-        config.sitemap_url = url.rstrip('/') + '/sitemap.xml'
-
     # Setup Output Dir
     if not os.path.exists(config.output_dir):
         os.makedirs(config.output_dir)
+
+    # Initial Status
+    update_job_status(config.output_dir, "starting", 5, "Initializing analysis...")
 
     # Logging
     setup_logging(config.log_file)
     logging.info(f"Starting background analysis for {url}")
 
     try:
-        # 1. Crawl
+        # 1. Sitemap Discovery
+        update_job_status(config.output_dir, "sitemaps", 10, "Scanning for sitemaps...")
         crawler = SEOCrawler(config)
+        sitemaps = crawler.discover_sitemaps()
+
+        if sitemaps:
+            config.sitemap_url = sitemaps[0] # Use first found as primary
+            logging.info(f"Using sitemap: {config.sitemap_url}")
+
+        # 2. Crawl
+        update_job_status(config.output_dir, "crawling", 30, f"Crawling {url} (Depth: {depth})...")
         crawl_file = crawler.execute()
 
         if not crawl_file:
             logging.error("Crawl returned no file.")
+            update_job_status(config.output_dir, "failed", 0, "Crawl failed. Check logs.")
             return
 
-        # 2. Analyze
+        # 3. Analyze
+        update_job_status(config.output_dir, "analyzing", 70, "Analyzing SEO metrics...")
         analyzer = SEOAnalyzer(config)
         df = analyzer.load_data(crawl_file)
 
         if df is None or len(df) == 0:
             logging.error("No data found in crawl file.")
+            update_job_status(config.output_dir, "failed", 0, "No data found in crawl.")
             return
 
         metrics = analyzer.analyze(df)
 
-        # 3. Score
+        # Add sitemaps to metrics for reporting
+        metrics['sitemaps'] = sitemaps
+
+        # 4. Score
         scorer = SEOScorer(config)
         score, rating, penalties = scorer.calculate(metrics)
 
-        # 4. Report (Force JSON for Web View)
+        # 5. Report (Force JSON for Web View)
+        update_job_status(config.output_dir, "reporting", 90, "Generating report...")
         config.output_format = 'json'
         reporter = ReporterFactory.create_reporter(config, metrics, score, rating, penalties)
         reporter.generate()
 
+        update_job_status(config.output_dir, "completed", 100, "Analysis complete!")
         logging.info("Analysis completed successfully.")
 
     except Exception as e:
         logging.exception(f"Fatal error during analysis task: {e}")
+        update_job_status(config.output_dir, "failed", 0, f"Error: {str(e)}")
 
 
 def get_reports_list():
@@ -119,8 +145,23 @@ async def home(request: Request):
 @app.post("/analyze")
 async def analyze(url: str = Form(...), depth: int = Form(3), background_tasks: BackgroundTasks = None):
     """Endpoint to trigger a new analysis."""
-    background_tasks.add_task(run_analysis_task, url, depth)
-    return RedirectResponse(url="/?status=started", status_code=303)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    background_tasks.add_task(run_analysis_task, url, depth, timestamp)
+    # Redirect immediately to the report viewer which will poll for status
+    return RedirectResponse(url=f"/report/{timestamp}", status_code=303)
+
+@app.get("/api/status/{report_id}")
+async def get_report_status(report_id: str):
+    """API to poll the status of a running job."""
+    status_path = REPORTS_DIR / report_id / "status.json"
+    if not status_path.exists():
+        # If folder exists but no status, it might be just starting or broken
+        if (REPORTS_DIR / report_id).exists():
+            return JSONResponse({"stage": "starting", "percent": 0, "message": "Initializing..."})
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    with open(status_path, 'r') as f:
+        return JSONResponse(json.load(f))
 
 @app.get("/api/reports/{report_id}")
 async def get_report_json(report_id: str):

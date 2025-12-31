@@ -1,6 +1,8 @@
 import advertools as adv
 import time
 import logging
+import requests
+from urllib.parse import urlparse, urljoin
 from config import SEOConfig
 
 class SEOCrawler:
@@ -9,9 +11,45 @@ class SEOCrawler:
     def __init__(self, config: SEOConfig):
         self.config = config
 
+    def discover_sitemaps(self) -> list:
+        """Attempts to find sitemaps via robots.txt and common paths."""
+        sitemaps = []
+        base_url = self.config.base_url
+
+        # 1. Check robots.txt
+        try:
+            robots_url = urljoin(base_url, '/robots.txt')
+            logging.info(f"Checking {robots_url} for sitemaps...")
+
+            # Simple fetch to avoid heavy advertools dependency for just this lines
+            resp = requests.get(robots_url, timeout=10, headers={'User-Agent': self.config.user_agent})
+            if resp.status_code == 200:
+                for line in resp.text.splitlines():
+                    if line.lower().strip().startswith('sitemap:'):
+                        smap = line.split(':', 1)[1].strip()
+                        if smap not in sitemaps:
+                            sitemaps.append(smap)
+        except Exception as e:
+            logging.warning(f"Failed to fetch/parse robots.txt: {e}")
+
+        # 2. Check common paths if none found
+        if not sitemaps:
+            common_paths = ['/sitemap.xml', '/sitemap_index.xml', '/sitemap/sitemap.xml']
+            for path in common_paths:
+                url = urljoin(base_url, path)
+                try:
+                    head = requests.head(url, timeout=5, headers={'User-Agent': self.config.user_agent})
+                    if head.status_code == 200:
+                        sitemaps.append(url)
+                except:
+                    pass
+
+        logging.info(f"Discovered sitemaps: {sitemaps}")
+        return sitemaps
+
     def execute(self) -> str:
         """Executes the crawl using advertools."""
-        print("🕷️  STARTING CRAWL OF TUWORKER.COM")
+        print(f"🕷️  STARTING CRAWL OF {self.config.base_url}")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print("⚙️  Configuration:")
         print(f"   • User-Agent: {self.config.user_agent}")
