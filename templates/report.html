@@ -111,7 +111,6 @@
                 <nav class="-mb-px flex gap-6">
                     <button @click="tab = 'issues'" :class="{'border-blue-500 text-blue-600': tab === 'issues', 'border-transparent text-gray-500': tab !== 'issues'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Issues List</button>
                     <button @click="tab = 'pages'" :class="{'border-blue-500 text-blue-600': tab === 'pages', 'border-transparent text-gray-500': tab !== 'pages'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Page Explorer</button>
-                    <button @click="tab = 'glossary'" :class="{'border-blue-500 text-blue-600': tab === 'glossary', 'border-transparent text-gray-500': tab !== 'glossary'}" class="py-4 px-1 border-b-2 font-medium text-sm transition">Glossary</button>
                 </nav>
             </div>
 
@@ -229,18 +228,6 @@
                             </template>
                         </tbody>
                     </table>
-                </div>
-            </div>
-
-            <!-- Glossary Tab -->
-            <div x-show="tab === 'glossary'" class="bg-white rounded-lg shadow-sm p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <template x-for="(desc, term) in report?.glossary" :key="term">
-                        <div class="border border-gray-200 rounded p-4">
-                            <h4 class="font-bold text-gray-800 mb-2" x-text="term"></h4>
-                            <p class="text-sm text-gray-600" x-text="desc"></p>
-                        </div>
-                    </template>
                 </div>
             </div>
 

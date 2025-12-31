@@ -412,52 +412,53 @@ class SEOAnalyzer:
         errors = []
         warnings = []
         notices = []
+        definitions = self.get_issue_definitions()
+
+        # Helper to standardize items
+        def add_issue(list_ref, name, items):
+            if items:
+                # Convert Dict items (Duplicates) to list of objects
+                # dict format: {'Title': ['url1', 'url2']}
+                # target format: [{'value': 'Title', 'urls': ['url1', 'url2']}]
+                final_items = []
+                if isinstance(items, dict):
+                    for k, v in items.items():
+                        final_items.append({'value': k, 'urls': v})
+                else:
+                    final_items = items
+
+                list_ref.append({
+                    'name': name,
+                    'count': len(items) if isinstance(items, list) else len(items.keys()),
+                    'items': final_items,
+                    'description': definitions.get(name, "")
+                })
 
         # Errors (Critical)
-        if metrics['http']['broken_links']:
-            errors.append({'name': 'Broken Links (4xx)', 'count': len(metrics['http']['broken_links']), 'items': metrics['http']['broken_links']})
-        if metrics['http']['server_errors']:
-            errors.append({'name': 'Server Errors (5xx)', 'count': len(metrics['http']['server_errors']), 'items': metrics['http']['server_errors']})
-        if metrics['title']['duplicates']:
-            errors.append({'name': 'Duplicate Titles', 'count': len(metrics['title']['duplicates']), 'items': metrics['title']['duplicates']})
-        if metrics['security']['non_https']:
-            errors.append({'name': 'Non-HTTPS Pages', 'count': len(metrics['security']['non_https']), 'items': metrics['security']['non_https']})
+        add_issue(errors, 'Broken Links (4xx)', metrics['http']['broken_links'])
+        add_issue(errors, 'Server Errors (5xx)', metrics['http']['server_errors'])
+        add_issue(errors, 'Duplicate Titles', metrics['title']['duplicates'])
+        add_issue(errors, 'Non-HTTPS Pages', metrics['security']['non_https'])
 
         # Warnings (Important)
-        if metrics['h1']['no_h1']:
-            warnings.append({'name': 'Missing H1 Tags', 'count': len(metrics['h1']['no_h1']), 'items': metrics['h1']['no_h1']})
-        if metrics['h1']['duplicate_h1']:
-            warnings.append({'name': 'Duplicate H1 Content', 'count': len(metrics['h1']['duplicate_h1']), 'items': metrics['h1']['duplicate_h1']})
-        if metrics['meta']['no_meta']:
-            warnings.append({'name': 'Missing Meta Descriptions', 'count': len(metrics['meta']['no_meta']), 'items': metrics['meta']['no_meta']})
-        if metrics['meta']['duplicates']:
-            warnings.append({'name': 'Duplicate Meta Descriptions', 'count': len(metrics['meta']['duplicates']), 'items': metrics['meta']['duplicates']})
-        if metrics['title']['no_title']:
-            warnings.append({'name': 'Missing Titles', 'count': len(metrics['title']['no_title']), 'items': metrics['title']['no_title']})
-        if metrics['title']['long']:
-            warnings.append({'name': 'Titles Too Long', 'count': len(metrics['title']['long']), 'items': metrics['title']['long']})
-        if metrics['images']['missing_alt_details']:
-            warnings.append({'name': 'Images Missing Alt Text', 'count': metrics['images']['missing_alt_count'], 'items': metrics['images']['missing_alt_details']})
-        if metrics['others']['performance']['slow_pages']:
-            warnings.append({'name': 'Slow Load Time', 'count': len(metrics['others']['performance']['slow_pages']), 'items': metrics['others']['performance']['slow_pages']})
-        if metrics['others']['performance']['huge_pages']:
-             warnings.append({'name': 'Huge Page Size', 'count': len(metrics['others']['performance']['huge_pages']), 'items': metrics['others']['performance']['huge_pages']})
-        if metrics['content']['low_word_count']:
-            warnings.append({'name': 'Low Word Count', 'count': len(metrics['content']['low_word_count']), 'items': metrics['content']['low_word_count']})
+        add_issue(warnings, 'Missing H1 Tags', metrics['h1']['no_h1'])
+        add_issue(warnings, 'Duplicate H1 Content', metrics['h1']['duplicate_h1'])
+        add_issue(warnings, 'Missing Meta Descriptions', metrics['meta']['no_meta'])
+        add_issue(warnings, 'Duplicate Meta Descriptions', metrics['meta']['duplicates'])
+        add_issue(warnings, 'Missing Titles', metrics['title']['no_title'])
+        add_issue(warnings, 'Titles Too Long', metrics['title']['long'])
+        add_issue(warnings, 'Images Missing Alt Text', metrics['images']['missing_alt_details'])
+        add_issue(warnings, 'Slow Load Time', metrics['others']['performance']['slow_pages'])
+        add_issue(warnings, 'Huge Page Size', metrics['others']['performance']['huge_pages'])
+        add_issue(warnings, 'Low Word Count', metrics['content']['low_word_count'])
 
         # Notices (Info/Optimization)
-        if metrics['http']['redirects']:
-            notices.append({'name': 'Redirects (3xx)', 'count': len(metrics['http']['redirects']), 'items': metrics['http']['redirects']})
-        if metrics['title']['short']:
-            notices.append({'name': 'Titles Too Short', 'count': len(metrics['title']['short']), 'items': metrics['title']['short']})
-        if metrics['meta']['short']:
-            notices.append({'name': 'Meta Desc Too Short', 'count': len(metrics['meta']['short']), 'items': metrics['meta']['short']})
-        if metrics['meta']['long']:
-            notices.append({'name': 'Meta Desc Too Long', 'count': len(metrics['meta']['long']), 'items': metrics['meta']['long']})
-        if metrics['canonical']['no_canonical']:
-            notices.append({'name': 'Missing Canonical', 'count': len(metrics['canonical']['no_canonical']), 'items': metrics['canonical']['no_canonical']})
-        if metrics['content']['low_text_ratio']:
-            notices.append({'name': 'Low Text-HTML Ratio', 'count': len(metrics['content']['low_text_ratio']), 'items': metrics['content']['low_text_ratio']})
+        add_issue(notices, 'Redirects (3xx)', metrics['http']['redirects'])
+        add_issue(notices, 'Titles Too Short', metrics['title']['short'])
+        add_issue(notices, 'Meta Desc Too Short', metrics['meta']['short'])
+        add_issue(notices, 'Meta Desc Too Long', metrics['meta']['long'])
+        add_issue(notices, 'Missing Canonical', metrics['canonical']['no_canonical'])
+        add_issue(notices, 'Low Text-HTML Ratio', metrics['content']['low_text_ratio'])
 
         return {'errors': errors, 'warnings': warnings, 'notices': notices}
 
@@ -474,27 +475,32 @@ class SEOAnalyzer:
             name = issue_group['name']
             items = issue_group['items']
 
-            # Identify URLs in items based on structure
-            if isinstance(items, dict): # Duplicates {text: [urls]}
-                for text, urls in items.items():
-                    for url in urls:
+            # Items are now standardized lists of objects or strings
+            # Case 1: Duplicates [{'value': '...', 'urls': [...]}]
+            if items and isinstance(items[0], dict) and 'urls' in items[0]:
+                for entry in items:
+                    for url in entry['urls']:
                         if url not in url_issues: url_issues[url] = []
-                        url_issues[url].append(f"{name}: '{text[:30]}...'")
-            elif isinstance(items, list):
-                for item in items:
-                    url = None
-                    extra = ""
-                    if isinstance(item, str):
-                        url = item
-                    elif isinstance(item, dict) and 'url' in item:
-                        url = item['url']
-                        if 'count' in item: extra = f" ({item['count']})"
-                        if 'ratio' in item: extra = f" ({item['ratio']:.1f}%)"
-                        if 'status' in item: extra = f" ({item['status']})"
+                        url_issues[url].append(f"{name}: '{str(entry['value'])[:30]}...'")
 
-                    if url:
-                        if url not in url_issues: url_issues[url] = []
-                        url_issues[url].append(f"{name}{extra}")
+            # Case 2: List of objects with 'url' key
+            elif items and isinstance(items[0], dict) and 'url' in items[0]:
+                for entry in items:
+                    url = entry['url']
+                    extra = ""
+                    if 'count' in entry: extra = f" ({entry['count']})"
+                    if 'ratio' in entry: extra = f" ({entry['ratio']:.1f}%)"
+                    if 'status' in entry: extra = f" ({entry['status']})"
+
+                    if url not in url_issues: url_issues[url] = []
+                    url_issues[url].append(f"{name}{extra}")
+
+            # Case 3: List of strings (URLs)
+            elif items and isinstance(items[0], str):
+                for url in items:
+                    if url not in url_issues: url_issues[url] = []
+                    url_issues[url].append(name)
+
 
         # Iterate all pages
         for _, row in df.iterrows():
@@ -520,6 +526,12 @@ class SEOAnalyzer:
             elif issues_list:
                 status = "🔵 Notice"
 
+            # Social & Schema Data
+            og_title = row.get('og_title', '')
+            og_desc = row.get('og_description', '')
+            og_image = row.get('og_image', '')
+            jsonld = row.get('jsonld', '')
+
             page_details[url] = {
                 'status': status,
                 'title': title,
@@ -530,7 +542,11 @@ class SEOAnalyzer:
                 'meta_desc': meta,
                 'canonical': str(row.get('canonical', '')),
                 'status_code': row.get('status', 0),
-                'load_time': row.get('download_latency', 0)
+                'load_time': row.get('download_latency', 0),
+                'og_title': str(og_title) if pd.notna(og_title) else '',
+                'og_desc': str(og_desc) if pd.notna(og_desc) else '',
+                'og_image': str(og_image) if pd.notna(og_image) else '',
+                'jsonld': str(jsonld) if pd.notna(jsonld) else ''
             }
 
         return page_details

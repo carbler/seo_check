@@ -290,11 +290,14 @@ async def view_page_detail(request: Request, report_id: str, url: str):
     if not page_data:
         raise HTTPException(status_code=404, detail="Page not found in report")
 
+    # Pass Config thresholds for comparison logic
+    config = SEOConfig()
     return templates.TemplateResponse("page_detail.html", {
         "request": request,
         "report_id": report_id,
         "url": url,
-        "data": page_data
+        "data": page_data,
+        "config": config
     })
 
 if __name__ == "__main__":

@@ -25,9 +25,10 @@
 
         <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
             <div class="p-6 border-b border-gray-200">
-                <h2 class="text-2xl font-bold text-gray-800">{{ issue.name }}</h2>
-                <div class="mt-2 text-sm text-gray-500">
-                    <span class="font-semibold">{{ issue.count }}</span> pages affected
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ issue.name }}</h2>
+                <div class="text-gray-600 mb-4">{{ issue.description }}</div>
+                <div class="text-sm text-gray-500">
+                    <span class="font-semibold">{{ issue.count }}</span> items affected
                 </div>
             </div>
         </div>
@@ -45,28 +46,28 @@
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 text-sm text-gray-900 font-mono break-all">
                             {% if item is mapping %}
-                                <!-- Handle Dictionary Items (e.g. Duplicates) -->
-                                {% for key, val in item.items() %}
-                                    <div class="mb-1"><strong>{{ key }}:</strong></div>
+                                {% if item.value %}
+                                    <!-- Duplicates Format: {'value': 'Title X', 'urls': [...]} -->
+                                    <div class="mb-1"><strong>{{ item.value }}</strong></div>
                                     <ul class="list-disc pl-5">
-                                    {% for url in val %}
+                                    {% for url in item.urls %}
                                         <li><a href="/report/{{ report_id }}/page?url={{ url }}" class="text-blue-600 hover:underline">{{ url }}</a></li>
                                     {% endfor %}
                                     </ul>
-                                {% endfor %}
-                            {% elif item.url %}
-                                <!-- Handle Object Items (e.g. Missing Alt) -->
-                                <a href="/report/{{ report_id }}/page?url={{ item.url }}" class="text-blue-600 hover:underline">{{ item.url }}</a>
-                                {% if item.count %} <span class="text-gray-500 ml-2">({{ item.count }} items)</span>{% endif %}
-                                {% if item.ratio %} <span class="text-gray-500 ml-2">({{ item.ratio|round(1) }}%)</span>{% endif %}
-                                {% if item.status %} <span class="text-gray-500 ml-2">(Status: {{ item.status }})</span>{% endif %}
+                                {% elif item.url %}
+                                    <!-- Standard Item Object -->
+                                    <a href="/report/{{ report_id }}/page?url={{ item.url }}" class="text-blue-600 hover:underline">{{ item.url }}</a>
+                                    {% if item.count %} <span class="text-gray-500 ml-2">({{ item.count }} items)</span>{% endif %}
+                                    {% if item.ratio %} <span class="text-gray-500 ml-2">({{ item.ratio|round(1) }}%)</span>{% endif %}
+                                    {% if item.status %} <span class="text-gray-500 ml-2">(Status: {{ item.status }})</span>{% endif %}
+                                {% endif %}
                             {% else %}
-                                <!-- Handle String Items (Simple URL list) -->
+                                <!-- Simple String URL -->
                                 <a href="/report/{{ report_id }}/page?url={{ item }}" class="text-blue-600 hover:underline">{{ item }}</a>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            {% set url_link = item.url if item.url else (item if item is string else '') %}
+                            {% set url_link = item.url if (item is mapping and item.url) else (item if item is string else '') %}
                             {% if url_link %}
                                 <a href="/report/{{ report_id }}/page?url={{ url_link }}" class="text-blue-600 hover:text-blue-900">
                                     Analyze <i class="fa-solid fa-arrow-right ml-1"></i>
