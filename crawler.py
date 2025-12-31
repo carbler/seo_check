@@ -2,6 +2,10 @@ import advertools as adv
 import time
 import logging
 import requests
+import json
+import sys
+import subprocess
+import os
 from urllib.parse import urlparse, urljoin
 from config import SEOConfig
 
@@ -48,7 +52,7 @@ class SEOCrawler:
         return sitemaps
 
     def execute(self) -> str:
-        """Executes the crawl using advertools."""
+        """Executes the crawl using advertools (via subprocess)."""
         print(f"🕷️  STARTING CRAWL OF {self.config.base_url}")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print("⚙️  Configuration:")
@@ -59,7 +63,6 @@ class SEOCrawler:
         print("   • No page limit")
 
         # Add body text extraction to enable content analysis
-        # Using a custom name to avoid conflict with advertools default keys if present
         selectors = {
             'page_body_text': 'body ::text',
         }
@@ -81,16 +84,38 @@ class SEOCrawler:
         start_time = time.time()
         print("\n⏳ Crawling in progress... (Check log file for details)")
 
+        # Prepare config for runner
+        runner_config = {
+            'url': self.config.base_url,
+            'output_file': self.config.crawl_file,
+            'follow_links': self.config.follow_links,
+            'selectors': selectors,
+            'settings': custom_settings
+        }
+
+        config_path = os.path.join(self.config.output_dir, 'crawl_config.json')
+        with open(config_path, 'w') as f:
+            json.dump(runner_config, f, indent=2)
+
         try:
-            adv.crawl(
-                self.config.base_url,
-                output_file=self.config.crawl_file,
-                follow_links=self.config.follow_links,
-                css_selectors=selectors,
-                custom_settings=custom_settings
+            # Run crawl in a subprocess to avoid Twisted reactor restart issues
+            # capturing output to avoid spamming the console/logs too much, or let it flow
+            # We'll rely on LOG_FILE for details
+            result = subprocess.run(
+                [sys.executable, 'crawl_runner.py', config_path],
+                check=True,
+                capture_output=True,
+                text=True
             )
+            logging.info(f"Crawl process output: {result.stdout}")
+            if result.stderr:
+                logging.warning(f"Crawl process stderr: {result.stderr}")
+
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Crawl subprocess failed with code {e.returncode}: {e.stderr}")
+            return None
         except Exception as e:
-            logging.error(f"Crawl failed: {e}")
+            logging.error(f"Crawl execution failed: {e}")
             return None
 
         duration = time.time() - start_time
