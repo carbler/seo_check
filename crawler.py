@@ -6,6 +6,8 @@ import json
 import sys
 import subprocess
 import os
+import asyncio
+import re
 from urllib.parse import urlparse, urljoin
 from config import SEOConfig
 
@@ -51,7 +53,7 @@ class SEOCrawler:
         logging.info(f"Discovered sitemaps: {sitemaps}")
         return sitemaps
 
-    def execute(self) -> str:
+    async def execute(self, websocket_manager=None, report_id=None) -> str:
         """Executes the crawl using advertools (via subprocess)."""
         print(f"🕷️  STARTING CRAWL OF {self.config.base_url}")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -98,22 +100,53 @@ class SEOCrawler:
             json.dump(runner_config, f, indent=2)
 
         try:
-            # Run crawl in a subprocess to avoid Twisted reactor restart issues
-            # capturing output to avoid spamming the console/logs too much, or let it flow
-            # We'll rely on LOG_FILE for details
-            result = subprocess.run(
-                [sys.executable, 'crawl_runner.py', config_path],
-                check=True,
-                capture_output=True,
-                text=True
+            # Run crawl in a subprocess to avoid Twisted reactor restart issues.
+            # Use Popen to read stdout/stderr line by line for realtime updates.
+            process = await asyncio.create_subprocess_exec(
+                sys.executable, 'crawl_runner.py', config_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            logging.info(f"Crawl process output: {result.stdout}")
-            if result.stderr:
-                logging.warning(f"Crawl process stderr: {result.stderr}")
 
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Crawl subprocess failed with code {e.returncode}: {e.stderr}")
-            return None
+            # Regex to find crawled pages in stderr (Scrapy default logging)
+            # Log format example: 2023-10-27 10:00:00 [scrapy.core.engine] DEBUG: Crawled (200) <GET https://example.com> (referer: None)
+            crawled_pattern = re.compile(r"Crawled \((\d+)\) <GET (.*?)>")
+
+            async def read_stream(stream, is_stderr=False):
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    line_str = line.decode('utf-8').strip()
+                    if not line_str: continue
+
+                    # Forward to logging
+                    if is_stderr:
+                        # Scrapy logs mostly to stderr
+                        # Check for crawled page match
+                        match = crawled_pattern.search(line_str)
+                        if match and websocket_manager and report_id:
+                            status_code = match.group(1)
+                            url = match.group(2)
+                            await websocket_manager.broadcast({
+                                "type": "crawl_event",
+                                "url": url,
+                                "status": status_code
+                            }, report_id)
+                    else:
+                        logging.info(f"Runner stdout: {line_str}")
+
+            await asyncio.gather(
+                read_stream(process.stdout, is_stderr=False),
+                read_stream(process.stderr, is_stderr=True)
+            )
+
+            await process.wait()
+
+            if process.returncode != 0:
+                logging.error(f"Crawl subprocess failed with code {process.returncode}")
+                return None
+
         except Exception as e:
             logging.error(f"Crawl execution failed: {e}")
             return None

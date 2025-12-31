@@ -28,12 +28,15 @@ class SEOConfig:
     min_word_count: int = 250
     text_ratio_threshold: float = 10.0
 
+    # NEW: File Size Threshold (2MB)
+    max_page_size_bytes: int = 2 * 1024 * 1024
+
     # Score Thresholds
     critical_threshold: int = 5
     warning_threshold: int = 10
 
     # Output Configuration
-    # Only JSON needed for the Viewer
+    output_format: str = 'json'
 
     # Dynamic Filenames
     timestamp: str = field(default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S"))

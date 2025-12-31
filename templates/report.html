@@ -46,6 +46,17 @@
                 <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" :style="'width: ' + (status ? status.percent : 0) + '%'"></div>
             </div>
             <p class="text-sm text-gray-500 mt-2" x-text="(status ? status.percent : 0) + '%'"></p>
+
+            <!-- Real-time Log Console -->
+            <div class="mt-8 w-full max-w-2xl bg-gray-900 text-green-400 font-mono text-xs p-4 rounded-md shadow-inner h-64 overflow-y-auto">
+                <template x-for="log in logs" :key="log.id">
+                    <div class="mb-1">
+                        <span class="text-gray-500" x-text="log.time"></span>
+                        <span x-text="log.message"></span>
+                    </div>
+                </template>
+                <div x-show="logs.length === 0" class="text-gray-600 italic">Waiting for logs...</div>
+            </div>
         </div>
 
         <!-- Error State -->
@@ -87,6 +98,11 @@
                         <div class="text-gray-500 text-sm font-medium uppercase">Total Pages</div>
                         <div class="text-3xl font-bold text-gray-900 mt-1" x-text="report?.summary.total_pages"></div>
                     </div>
+                    <!-- Size Stat -->
+                    <div class="col-span-3 bg-white p-4 rounded-lg shadow-sm flex justify-between items-center text-sm text-gray-600">
+                         <span><strong>Avg Page Size:</strong> <span x-text="(report?.metrics?.others?.performance?.avg_size_bytes / 1024).toFixed(1) + ' KB'"></span></span>
+                         <span><strong>Avg Load Time:</strong> <span x-text="report?.metrics?.others?.performance?.avg_time.toFixed(3) + 's'"></span></span>
+                    </div>
                 </div>
             </div>
 
@@ -110,19 +126,14 @@
                         </div>
                         <div class="divide-y divide-gray-100">
                             <template x-for="issue in report.metrics.issues.errors">
-                                <div class="px-6 py-4" x-data="{ expanded: false }">
-                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
-                                        <div>
-                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
-                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
-                                        </div>
-                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                <div class="px-6 py-4 flex justify-between items-center hover:bg-gray-50">
+                                    <div>
+                                        <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
                                     </div>
-                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-red-200 text-sm text-gray-600 space-y-1">
-                                        <template x-for="item in normalizeItems(issue.items)">
-                                            <div class="truncate font-mono text-xs" x-text="item"></div>
-                                        </template>
-                                    </div>
+                                    <a :href="'/report/' + reportId + '/issue/' + encodeURIComponent(issue.name)" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        View Details <i class="fa-solid fa-arrow-right ml-1"></i>
+                                    </a>
                                 </div>
                             </template>
                         </div>
@@ -138,19 +149,14 @@
                         </div>
                         <div class="divide-y divide-gray-100">
                             <template x-for="issue in report.metrics.issues.warnings">
-                                <div class="px-6 py-4" x-data="{ expanded: false }">
-                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
-                                        <div>
-                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
-                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
-                                        </div>
-                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                <div class="px-6 py-4 flex justify-between items-center hover:bg-gray-50">
+                                    <div>
+                                        <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
                                     </div>
-                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-yellow-200 text-sm text-gray-600 space-y-1">
-                                        <template x-for="item in normalizeItems(issue.items)">
-                                            <div class="truncate font-mono text-xs" x-text="item"></div>
-                                        </template>
-                                    </div>
+                                    <a :href="'/report/' + reportId + '/issue/' + encodeURIComponent(issue.name)" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        View Details <i class="fa-solid fa-arrow-right ml-1"></i>
+                                    </a>
                                 </div>
                             </template>
                         </div>
@@ -166,19 +172,14 @@
                         </div>
                         <div class="divide-y divide-gray-100">
                             <template x-for="issue in report.metrics.issues.notices">
-                                <div class="px-6 py-4" x-data="{ expanded: false }">
-                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
-                                        <div>
-                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
-                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
-                                        </div>
-                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                <div class="px-6 py-4 flex justify-between items-center hover:bg-gray-50">
+                                    <div>
+                                        <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
                                     </div>
-                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-blue-200 text-sm text-gray-600 space-y-1">
-                                        <template x-for="item in normalizeItems(issue.items)">
-                                            <div class="truncate font-mono text-xs" x-text="item"></div>
-                                        </template>
-                                    </div>
+                                    <a :href="'/report/' + reportId + '/issue/' + encodeURIComponent(issue.name)" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        View Details <i class="fa-solid fa-arrow-right ml-1"></i>
+                                    </a>
                                 </div>
                             </template>
                         </div>
@@ -203,12 +204,13 @@
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issues</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             <template x-for="(data, url) in filteredPages" :key="url">
-                                <tr class="hover:bg-gray-50 cursor-pointer" @click="openPageDetails(url, data)">
+                                <tr class="hover:bg-gray-50 cursor-pointer" @click="window.location.href = '/report/' + reportId + '/page?url=' + encodeURIComponent(url)">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="px-2 text-xs font-semibold rounded-full"
                                               :class="{
@@ -221,6 +223,7 @@
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-500 max-w-md truncate" x-text="url"></td>
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="(data.size / 1024).toFixed(1) + ' KB'"></td>
                                     <td class="px-6 py-4 text-sm text-gray-500" x-text="data.issues.length + ' issues'"></td>
                                 </tr>
                             </template>
@@ -243,36 +246,12 @@
 
         </div>
 
-        <!-- Page Detail Modal -->
-        <div x-show="selectedPage" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @click.self="selectedPage = null">
-            <div class="flex items-center justify-center min-h-screen px-4">
-                <div class="fixed inset-0 bg-gray-500 bg-opacity-75"></div>
-                <div class="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-2xl w-full z-10">
-                    <div class="px-6 py-4 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Page Details</h3>
-                        <p class="text-sm text-gray-500 break-all" x-text="selectedPage?.url"></p>
-                    </div>
-                    <div class="p-6">
-                        <h4 class="font-bold text-gray-700 mb-2">Issues Detected:</h4>
-                        <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1">
-                            <template x-for="issue in selectedPage?.data.issues">
-                                <li x-text="issue"></li>
-                            </template>
-                            <li x-show="!selectedPage?.data.issues.length" class="text-green-600 list-none">✅ No issues found.</li>
-                        </ul>
-                    </div>
-                    <div class="bg-gray-50 px-6 py-3 flex justify-end">
-                        <button class="bg-white border border-gray-300 rounded-md shadow-sm px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="selectedPage = null">Close</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </main>
 
     <script>
         function seoViewer(reportId) {
             return {
+                reportId: reportId,
                 report: null,
                 status: null,
                 loading: true,
@@ -281,16 +260,47 @@
                 counts: { errors: 0, warnings: 0 },
                 search: '',
                 filterStatus: 'all',
-                selectedPage: null,
-                pollInterval: null,
+                logs: [],
+                ws: null,
 
                 init() {
                     this.pollStatus();
+                    this.connectWebSocket();
+                },
+
+                connectWebSocket() {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/${this.reportId}`);
+
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+
+                        if (data.type === 'log') {
+                            this.addLog(data.message);
+                        } else if (data.type === 'crawl_event') {
+                            this.addLog(`Crawled: ${data.url} (${data.status})`);
+                        } else if (data.type === 'complete') {
+                            this.addLog("Analysis Finished!");
+                            this.pollStatus(); // Force status update to trigger completed view
+                        } else if (data.type === 'error') {
+                            this.addLog(`Error: ${data.message}`);
+                        }
+                    };
+                },
+
+                addLog(message) {
+                    this.logs.unshift({
+                        id: Date.now(),
+                        time: new Date().toLocaleTimeString(),
+                        message: message
+                    });
+                    // Keep logs limited
+                    if (this.logs.length > 50) this.logs.pop();
                 },
 
                 async pollStatus() {
                     try {
-                        const response = await fetch(`/api/status/${reportId}`);
+                        const response = await fetch(`/api/status/${this.reportId}`);
                         if (!response.ok) throw new Error('Status check failed');
 
                         this.status = await response.json();
@@ -314,11 +324,12 @@
                 async loadReport() {
                     try {
                         this.loading = true;
-                        const response = await fetch(`/api/reports/${reportId}`);
+                        const response = await fetch(`/api/reports/${this.reportId}`);
                         if (!response.ok) throw new Error('Failed to fetch report');
                         this.report = await response.json();
                         this.calculateCounts();
                         this.loading = false;
+                        if (this.ws) this.ws.close(); // Close socket when done
                     } catch (e) {
                         console.error(e);
                         this.error = true;
@@ -338,24 +349,6 @@
                     }
                 },
 
-                normalizeItems(items) {
-                    if (Array.isArray(items)) {
-                        return items.map(i => {
-                            if (typeof i === 'string') return i;
-                            if (i.url) return i.url + (i.count ? ` (${i.count})` : '');
-                            return JSON.stringify(i);
-                        });
-                    }
-                    if (typeof items === 'object') {
-                        let res = [];
-                        for (let [key, val] of Object.entries(items)) {
-                            res.push(`"${key}": ` + val.join(', '));
-                        }
-                        return res;
-                    }
-                    return [];
-                },
-
                 get filteredPages() {
                     if (!this.report || !this.report.metrics || !this.report.metrics.page_details) return {};
                     const pages = this.report.metrics.page_details;
@@ -366,10 +359,6 @@
                             return matchesSearch && matchesFilter;
                         })
                     );
-                },
-
-                openPageDetails(url, data) {
-                    this.selectedPage = { url, data };
                 }
             }
         }

@@ -308,9 +308,18 @@ class SEOAnalyzer:
             slow_pages = []
             avg_time = 0
 
+        # New: Size Analysis
+        huge_pages = []
+        avg_size = 0
+        if 'size' in df.columns:
+            avg_size = df['size'].mean()
+            huge_pages = df[df['size'] > self.config.max_page_size_bytes]['url'].tolist()
+
         results['performance'] = {
             'slow_pages': slow_pages,
-            'avg_time': avg_time
+            'avg_time': avg_time,
+            'avg_size_bytes': avg_size,
+            'huge_pages': huge_pages
         }
 
         if 'url' in df.columns:
@@ -389,7 +398,7 @@ class SEOAnalyzer:
             'others': {
                 'og': {'title': 0, 'desc': 0, 'image': 0, 'total': 0},
                 'schema': {'present': 0, 'total': 0},
-                'performance': {'slow_pages': [], 'avg_time': 0},
+                'performance': {'slow_pages': [], 'avg_time': 0, 'avg_size_bytes': 0, 'huge_pages': []},
                 'urls': {'avg_depth': 0, 'max_depth': 0, 'depth_dist': {}}
             },
             'content': {'low_word_count': [], 'low_text_ratio': []},
@@ -431,6 +440,8 @@ class SEOAnalyzer:
             warnings.append({'name': 'Images Missing Alt Text', 'count': metrics['images']['missing_alt_count'], 'items': metrics['images']['missing_alt_details']})
         if metrics['others']['performance']['slow_pages']:
             warnings.append({'name': 'Slow Load Time', 'count': len(metrics['others']['performance']['slow_pages']), 'items': metrics['others']['performance']['slow_pages']})
+        if metrics['others']['performance']['huge_pages']:
+             warnings.append({'name': 'Huge Page Size', 'count': len(metrics['others']['performance']['huge_pages']), 'items': metrics['others']['performance']['huge_pages']})
         if metrics['content']['low_word_count']:
             warnings.append({'name': 'Low Word Count', 'count': len(metrics['content']['low_word_count']), 'items': metrics['content']['low_word_count']})
 
@@ -496,6 +507,9 @@ class SEOAnalyzer:
             col_name = 'page_body_text' if 'page_body_text' in df.columns else 'body_text'
             words = len(str(row.get(col_name, '')).split())
 
+            # Size
+            size_bytes = row.get('size', 0)
+
             status = "✅ Good"
             issues_list = url_issues.get(url, [])
 
@@ -511,7 +525,12 @@ class SEOAnalyzer:
                 'title': title,
                 'h1': h1,
                 'words': words,
-                'issues': issues_list
+                'size': size_bytes,
+                'issues': issues_list,
+                'meta_desc': meta,
+                'canonical': str(row.get('canonical', '')),
+                'status_code': row.get('status', 0),
+                'load_time': row.get('download_latency', 0)
             }
 
         return page_details
@@ -537,7 +556,8 @@ class SEOAnalyzer:
             "Meta Desc Too Short": "Description is too brief to entice clicks.",
             "Meta Desc Too Long": "Description will be cut off in search results.",
             "Missing Canonical": "No canonical tag found. Search engines may struggle with duplicate versions.",
-            "Low Text-HTML Ratio": "Page code is bloated compared to visible text. Can indicate code efficiency issues."
+            "Low Text-HTML Ratio": "Page code is bloated compared to visible text. Can indicate code efficiency issues.",
+            "Huge Page Size": f"Page size exceeds {self.config.max_page_size_bytes / 1024 / 1024:.1f} MB. Heavy pages hurt mobile performance."
         }
 
 
@@ -613,6 +633,14 @@ class SEOScorer:
             penalty = 10
             score -= penalty
             penalties_log.append(f"Insecure Pages (HTTP): -{penalty}")
+
+        # 7. Huge Pages
+        huge_page_count = len(metrics['others']['performance']['huge_pages'])
+        if huge_page_count > 0:
+            penalty = huge_page_count * 2
+            penalty = min(penalty, 10)
+            score -= penalty
+            penalties_log.append(f"Huge Pages (> 2MB): -{penalty}")
 
         score = max(0, score)
 

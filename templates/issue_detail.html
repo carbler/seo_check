@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Issue Details - SEO Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <a href="/report/{{ report_id }}" class="text-gray-500 hover:text-gray-700 transition">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </a>
+                <h1 class="text-xl font-bold text-gray-900">Issue Details</h1>
+            </div>
+            <div class="text-sm text-gray-500">Generated: {{ report_date[:19] }}</div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800">{{ issue.name }}</h2>
+                <div class="mt-2 text-sm text-gray-500">
+                    <span class="font-semibold">{{ issue.count }}</span> pages affected
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL / Description</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for item in issue.items %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 text-sm text-gray-900 font-mono break-all">
+                            {% if item is mapping %}
+                                <!-- Handle Dictionary Items (e.g. Duplicates) -->
+                                {% for key, val in item.items() %}
+                                    <div class="mb-1"><strong>{{ key }}:</strong></div>
+                                    <ul class="list-disc pl-5">
+                                    {% for url in val %}
+                                        <li><a href="/report/{{ report_id }}/page?url={{ url }}" class="text-blue-600 hover:underline">{{ url }}</a></li>
+                                    {% endfor %}
+                                    </ul>
+                                {% endfor %}
+                            {% elif item.url %}
+                                <!-- Handle Object Items (e.g. Missing Alt) -->
+                                <a href="/report/{{ report_id }}/page?url={{ item.url }}" class="text-blue-600 hover:underline">{{ item.url }}</a>
+                                {% if item.count %} <span class="text-gray-500 ml-2">({{ item.count }} items)</span>{% endif %}
+                                {% if item.ratio %} <span class="text-gray-500 ml-2">({{ item.ratio|round(1) }}%)</span>{% endif %}
+                                {% if item.status %} <span class="text-gray-500 ml-2">(Status: {{ item.status }})</span>{% endif %}
+                            {% else %}
+                                <!-- Handle String Items (Simple URL list) -->
+                                <a href="/report/{{ report_id }}/page?url={{ item }}" class="text-blue-600 hover:underline">{{ item }}</a>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            {% set url_link = item.url if item.url else (item if item is string else '') %}
+                            {% if url_link %}
+                                <a href="/report/{{ report_id }}/page?url={{ url_link }}" class="text-blue-600 hover:text-blue-900">
+                                    Analyze <i class="fa-solid fa-arrow-right ml-1"></i>
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+
+</body>
+</html>
