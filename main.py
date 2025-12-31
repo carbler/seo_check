@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from rich.console import Console
 from rich.prompt import Prompt, IntPrompt, Confirm
 from rich.panel import Panel
@@ -26,9 +27,9 @@ class SEOApplication:
 
     def get_user_input(self):
         """Interactive CLI for configuration."""
-        console.print(Panel.fit("[bold blue]TuWorker SEO Analyzer v2.0[/bold blue]", border_style="blue"))
+        console.print(Panel.fit("[bold blue]SEO Analyzer v1.0[/bold blue]", border_style="blue"))
 
-        self.config.base_url = Prompt.ask("[bold green]Enter Target URL[/bold green]", default="https://tuworker.com")
+        self.config.base_url = Prompt.ask("[bold green]Enter Target URL[/bold green]", default="https://example.com")
         self.config.max_depth = IntPrompt.ask("[bold green]Max Crawl Depth[/bold green]", default=3)
 
         # Determine sitemap automatically if possible

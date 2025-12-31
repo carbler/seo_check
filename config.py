@@ -12,7 +12,7 @@ class SEOConfig:
 
     # Internal defaults
     sitemap_url: str = ''
-    user_agent: str = 'TuWorkerBot/2.0 (+https://tuworker.com/bot)'
+    user_agent: str = 'SEOAnalyzerBot/1.0 (+https://example.com/bot)'
     concurrent_requests: int = 8
     download_delay: float = 0.5
     robotstxt_obey: bool = True

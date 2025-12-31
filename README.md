@@ -1,4 +1,4 @@
-# 🕷️ TuWorker SEO Analyzer
+# 🕷️ SEO Analyzer
 
 A professional, Python-based Technical SEO Audit tool wrapped in a modern Web Interface.
 
@@ -63,7 +63,7 @@ Open your browser and navigate to:
 👉 **http://localhost:8000**
 
 ### 3. Run an Audit
-1.  Enter the **Target URL** (e.g., `https://tuworker.com`).
+1.  Enter the **Target URL** (e.g., `https://example.com`).
 2.  Set the **Max Depth** (e.g., `3` for a quick scan, `10` for deep crawl).
 3.  Click **Analyze**.
 4.  The scan runs in the background. Refresh the page after a few seconds/minutes to see the new report appear in the **Report History**.

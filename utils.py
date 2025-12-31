@@ -15,7 +15,7 @@ def setup_logging(log_file: str):
 
 def print_header():
     print("\n" + "="*60)
-    print("  TUWORKER.COM - COMPLETE SEO ANALYSIS")
+    print("  SEO ANALYZER - COMPLETE ANALYSIS")
     print("="*60 + "\n")
 
 def print_section(title):

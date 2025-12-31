@@ -39,8 +39,8 @@ class JSONReporter(SEOReporter):
             'meta': {
                 'generated_at': str(datetime.now()),
                 'target_url': self.config.base_url,
-                'tool': 'TuWorker SEO Analyzer',
-                'version': '2.0'
+                'tool': 'SEO Analyzer',
+                'version': '1.0'
             },
             'summary': {
                 'score': self.score,

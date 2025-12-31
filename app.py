@@ -16,7 +16,7 @@ from analyzer import SEOAnalyzer, SEOScorer
 from reporter import ReporterFactory
 
 # Initialize FastAPI
-app = FastAPI(title="TuWorker SEO Analyzer")
+app = FastAPI(title="SEO Analyzer")
 
 # Setup Folders
 REPORTS_DIR = Path("reports")
