@@ -96,7 +96,7 @@
             <!-- Issues Tab -->
             <div x-show="tab === 'issues'" class="space-y-6">
                 <!-- Errors -->
-                <template x-if="report?.metrics.issues.errors.length > 0">
+                <template x-if="report?.metrics?.issues?.errors?.length > 0">
                     <div class="bg-white rounded-lg shadow-sm overflow-hidden">
                         <div class="bg-red-50 px-6 py-4 border-b border-red-100 flex justify-between">
                             <h3 class="font-semibold text-red-800">Critical Issues</h3>
@@ -124,7 +124,7 @@
                 </template>
 
                 <!-- Warnings -->
-                <template x-if="report?.metrics.issues.warnings.length > 0">
+                <template x-if="report?.metrics?.issues?.warnings?.length > 0">
                     <div class="bg-white rounded-lg shadow-sm overflow-hidden">
                         <div class="bg-yellow-50 px-6 py-4 border-b border-yellow-100 flex justify-between">
                             <h3 class="font-semibold text-yellow-800">Warnings</h3>
@@ -141,6 +141,34 @@
                                         <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
                                     </div>
                                     <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-yellow-200 text-sm text-gray-600 space-y-1">
+                                        <template x-for="item in normalizeItems(issue.items)">
+                                            <div class="truncate font-mono text-xs" x-text="item"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Notices -->
+                <template x-if="report?.metrics?.issues?.notices?.length > 0">
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex justify-between">
+                            <h3 class="font-semibold text-blue-800">Notices</h3>
+                            <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full" x-text="report.metrics.issues.notices.length"></span>
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            <template x-for="issue in report.metrics.issues.notices">
+                                <div class="px-6 py-4" x-data="{ expanded: false }">
+                                    <div class="flex justify-between cursor-pointer" @click="expanded = !expanded">
+                                        <div>
+                                            <div class="font-medium text-gray-900" x-text="issue.name"></div>
+                                            <div class="text-sm text-gray-500" x-text="issue.count + ' pages affected'"></div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-down text-gray-400" :class="{'rotate-180': expanded}"></i>
+                                    </div>
+                                    <div x-show="expanded" class="mt-4 pl-4 border-l-2 border-blue-200 text-sm text-gray-600 space-y-1">
                                         <template x-for="item in normalizeItems(issue.items)">
                                             <div class="truncate font-mono text-xs" x-text="item"></div>
                                         </template>
@@ -256,15 +284,22 @@
                         this.calculateCounts();
                         this.loading = false;
                     } catch (e) {
+                        console.error(e);
                         this.error = true;
                         this.loading = false;
                     }
                 },
 
                 calculateCounts() {
-                    if (!this.report) return;
-                    this.counts.errors = this.report.metrics.issues.errors.reduce((acc, i) => acc + i.count, 0);
-                    this.counts.warnings = this.report.metrics.issues.warnings.reduce((acc, i) => acc + i.count, 0);
+                    if (!this.report || !this.report.metrics || !this.report.metrics.issues) return;
+
+                    const issues = this.report.metrics.issues;
+                    if (issues.errors) {
+                        this.counts.errors = issues.errors.reduce((acc, i) => acc + i.count, 0);
+                    }
+                    if (issues.warnings) {
+                        this.counts.warnings = issues.warnings.reduce((acc, i) => acc + i.count, 0);
+                    }
                 },
 
                 normalizeItems(items) {
@@ -286,7 +321,7 @@
                 },
 
                 get filteredPages() {
-                    if (!this.report) return {};
+                    if (!this.report || !this.report.metrics || !this.report.metrics.page_details) return {};
                     const pages = this.report.metrics.page_details;
                     return Object.fromEntries(
                         Object.entries(pages).filter(([url, data]) => {

@@ -49,7 +49,7 @@ class JSONReporter(SEOReporter):
                 'total_pages': self.metrics['http']['total']
             },
             'glossary': self.definitions,
-            'data': convert_numpy(self.metrics)
+            'metrics': convert_numpy(self.metrics)
         }
 
         with open(filename, 'w', encoding='utf-8') as f:
