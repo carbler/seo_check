@@ -177,8 +177,9 @@ async def get_report_json(report_id: str):
 @app.get("/report/{report_id}", response_class=HTMLResponse)
 async def view_report(request: Request, report_id: str):
     """Render the report viewer page."""
-    # Check existence to throw 404 immediately if invalid
-    if not (REPORTS_DIR / report_id / "report.json").exists():
+    # Check for folder existence instead of the final JSON report.
+    # The frontend will poll /api/status/{report_id} and handle the waiting state.
+    if not (REPORTS_DIR / report_id).exists():
         raise HTTPException(status_code=404, detail="Report not found")
 
     return templates.TemplateResponse("report.html", {"request": request, "report_id": report_id})
