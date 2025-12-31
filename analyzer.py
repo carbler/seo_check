@@ -430,7 +430,7 @@ class SEOAnalyzer:
                 list_ref.append({
                     'name': name,
                     'count': len(items) if isinstance(items, list) else len(items.keys()),
-                    'items': final_items,
+                    'details': final_items, # Renamed from 'items' to 'details'
                     'description': definitions.get(name, "")
                 })
 
@@ -473,7 +473,7 @@ class SEOAnalyzer:
 
         for issue_group in all_issues:
             name = issue_group['name']
-            items = issue_group['items']
+            items = issue_group['details'] # Renamed from 'items' to 'details'
 
             # Items are now standardized lists of objects or strings
             # Case 1: Duplicates [{'value': '...', 'urls': [...]}]
