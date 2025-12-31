@@ -10,3 +10,6 @@ reports/
 __pycache__/
 *.pyc
 myvenv/
+
+# System
+.DS_Store
