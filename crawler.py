@@ -102,8 +102,9 @@ class SEOCrawler:
         try:
             # Run crawl in a subprocess to avoid Twisted reactor restart issues.
             # Use Popen to read stdout/stderr line by line for realtime updates.
+            # Use -u to force unbuffered stdout/stderr
             process = await asyncio.create_subprocess_exec(
-                sys.executable, 'crawl_runner.py', config_path,
+                sys.executable, '-u', 'crawl_runner.py', config_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
