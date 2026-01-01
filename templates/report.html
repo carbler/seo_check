@@ -257,12 +257,29 @@
 
                 connectWebSocket() {
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    // Fix: Browser might block ws://0.0.0.0, replace with localhost if detected
-                    let host = window.location.host;
-                    if (host.startsWith('0.0.0.0')) {
-                        host = host.replace('0.0.0.0', '127.0.0.1');
+
+                    // Logic to ensure we don't connect to 0.0.0.0 which browsers block
+                    let hostname = window.location.hostname;
+                    let port = window.location.port ? `:${window.location.port}` : '';
+
+                    if (hostname === '0.0.0.0') {
+                        hostname = '127.0.0.1';
+                        console.log("Detected 0.0.0.0, switching WebSocket to 127.0.0.1");
                     }
-                    this.ws = new WebSocket(`${protocol}//${host}/ws/${this.reportId}`);
+
+                    const wsUrl = `${protocol}//${hostname}${port}/ws/${this.reportId}`;
+                    console.log("Connecting to WebSocket:", wsUrl);
+
+                    this.ws = new WebSocket(wsUrl);
+
+                    this.ws.onopen = () => {
+                        console.log("WebSocket Connected");
+                    };
+
+                    this.ws.onerror = (e) => {
+                        console.error("WebSocket Error:", e);
+                        this.addLog("WebSocket connection error. Try accessing via 127.0.0.1 instead of 0.0.0.0");
+                    };
 
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
