@@ -70,7 +70,9 @@ class SEOCrawler:
         }
 
         custom_settings = {
-            'LOG_FILE': self.config.log_file,
+            # REMOVE LOG_FILE to ensure logs go to stderr for real-time capture
+            # 'LOG_FILE': self.config.log_file,
+            'LOG_LEVEL': 'DEBUG', # Force DEBUG to see page visits
             'ROBOTSTXT_OBEY': self.config.robotstxt_obey,
             'USER_AGENT': self.config.user_agent,
             'CONCURRENT_REQUESTS': self.config.concurrent_requests,
@@ -100,6 +102,9 @@ class SEOCrawler:
             json.dump(runner_config, f, indent=2)
 
         try:
+            # Ensure log file directory exists and open it for appending
+            log_file_handle = open(self.config.log_file, 'a', encoding='utf-8')
+
             # Run crawl in a subprocess to avoid Twisted reactor restart issues.
             # Use Popen to read stdout/stderr line by line for realtime updates.
             # Use -u to force unbuffered stdout/stderr
@@ -121,10 +126,12 @@ class SEOCrawler:
                     line_str = line.decode('utf-8').strip()
                     if not line_str: continue
 
-                    # Forward to logging
                     if is_stderr:
-                        # Scrapy logs mostly to stderr
-                        # Check for crawled page match
+                        # Write to persistent log file manually since we disabled Scrapy's auto-write
+                        log_file_handle.write(line_str + '\n')
+                        log_file_handle.flush()
+
+                        # Check for crawled page match for WebSocket
                         match = crawled_pattern.search(line_str)
                         if match and websocket_manager and report_id:
                             status_code = match.group(1)
@@ -143,6 +150,7 @@ class SEOCrawler:
             )
 
             await process.wait()
+            log_file_handle.close()
 
             if process.returncode != 0:
                 logging.error(f"Crawl subprocess failed with code {process.returncode}")
