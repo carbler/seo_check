@@ -1,8 +1,9 @@
 import pandas as pd
 import logging
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from utils import to_list
 from config import SEOConfig
+import json
 
 class SEOAnalyzer:
     """Analyzes the crawled data to identify SEO issues."""
@@ -488,9 +489,9 @@ class SEOAnalyzer:
                 for entry in items:
                     url = entry['url']
                     extra = ""
-                    if 'count' in entry: extra = f" ({entry['count']})"
-                    if 'ratio' in entry: extra = f" ({entry['ratio']:.1f}%)"
-                    if 'status' in entry: extra = f" ({entry['status']})"
+                    if 'count' in entry: extra = f" ({entry['count']})" if 'count' in entry else ""
+                    if 'ratio' in entry: extra = f" ({entry['ratio']:.1f}%)" if 'ratio' in entry else ""
+                    if 'status' in entry: extra = f" ({entry['status']})" if 'status' in entry else ""
 
                     if url not in url_issues: url_issues[url] = []
                     url_issues[url].append(f"{name}{extra}")
@@ -506,7 +507,6 @@ class SEOAnalyzer:
         for _, row in df.iterrows():
             url = row['url']
 
-            # REMOVED SLICING HERE
             title = str(row.get('title', ''))
             meta = str(row.get('meta_desc', ''))
             h1 = str(row.get('h1', ''))
@@ -529,17 +529,39 @@ class SEOAnalyzer:
                 status = "🔵 Notice"
 
             # Social & Schema Data
-            # Note: jsonld column often comes as a string representation of JSON or nested list
-            # We want to provide it as raw text if possible, or attempt to parse/pretty print
+
+            # OG Image logic: fallback to first img_src if og_image missing
+            og_image = row.get('og_image', '')
+            if pd.isna(og_image) or og_image == '':
+                # Attempt fallback
+                img_srcs = to_list(row.get('img_src'))
+                if img_srcs and len(img_srcs) > 0:
+                    og_image = img_srcs[0]
+
+            # Ensure absolute URL
+            if og_image and not str(og_image).startswith(('http', '//')):
+                og_image = urljoin(url, str(og_image))
 
             og_title = row.get('og_title', '')
             og_desc = row.get('og_description', '')
-            og_image = row.get('og_image', '')
 
-            jsonld_raw = row.get('jsonld', '')
-            # If advertools returns multiple jsonld entries, it might be separated by @@ or be a list
-            # We normalize it for display
-            jsonld = str(jsonld_raw) if pd.notna(jsonld_raw) else ''
+            # JSON-LD Reconstruction
+            # Advertools flattens jsonld into columns starting with 'jsonld_'
+            # We want to reconstruct this into a clean dictionary or list of dicts
+            jsonld_data = {}
+            for col in df.columns:
+                if col.startswith('jsonld_'):
+                    val = row.get(col)
+                    if pd.notna(val) and val != '':
+                        key = col.replace('jsonld_', '')
+                        # Handle potential multi-value fields (advertools uses '@@')
+                        # But typically for single page row, it might be a string or list
+                        jsonld_data[key] = val
+
+            if jsonld_data:
+                jsonld = json.dumps(jsonld_data, indent=2, default=str)
+            else:
+                jsonld = ''
 
             page_details[url] = {
                 'status': status,
