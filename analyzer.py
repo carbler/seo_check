@@ -505,9 +505,11 @@ class SEOAnalyzer:
         # Iterate all pages
         for _, row in df.iterrows():
             url = row['url']
-            title = str(row.get('title', ''))[:50]
-            meta = str(row.get('meta_desc', ''))[:50]
-            h1 = str(row.get('h1', ''))[:50]
+
+            # REMOVED SLICING HERE
+            title = str(row.get('title', ''))
+            meta = str(row.get('meta_desc', ''))
+            h1 = str(row.get('h1', ''))
 
             # Words
             col_name = 'page_body_text' if 'page_body_text' in df.columns else 'body_text'
@@ -527,10 +529,17 @@ class SEOAnalyzer:
                 status = "🔵 Notice"
 
             # Social & Schema Data
+            # Note: jsonld column often comes as a string representation of JSON or nested list
+            # We want to provide it as raw text if possible, or attempt to parse/pretty print
+
             og_title = row.get('og_title', '')
             og_desc = row.get('og_description', '')
             og_image = row.get('og_image', '')
-            jsonld = row.get('jsonld', '')
+
+            jsonld_raw = row.get('jsonld', '')
+            # If advertools returns multiple jsonld entries, it might be separated by @@ or be a list
+            # We normalize it for display
+            jsonld = str(jsonld_raw) if pd.notna(jsonld_raw) else ''
 
             page_details[url] = {
                 'status': status,
@@ -546,7 +555,7 @@ class SEOAnalyzer:
                 'og_title': str(og_title) if pd.notna(og_title) else '',
                 'og_desc': str(og_desc) if pd.notna(og_desc) else '',
                 'og_image': str(og_image) if pd.notna(og_image) else '',
-                'jsonld': str(jsonld) if pd.notna(jsonld) else ''
+                'jsonld': jsonld
             }
 
         return page_details
