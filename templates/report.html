@@ -257,7 +257,12 @@
 
                 connectWebSocket() {
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/${this.reportId}`);
+                    // Fix: Browser might block ws://0.0.0.0, replace with localhost if detected
+                    let host = window.location.host;
+                    if (host.startsWith('0.0.0.0')) {
+                        host = host.replace('0.0.0.0', '127.0.0.1');
+                    }
+                    this.ws = new WebSocket(`${protocol}//${host}/ws/${this.reportId}`);
 
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
