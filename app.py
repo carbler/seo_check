@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Form, BackgroundTasks, HTTPException, WebS
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import json
@@ -19,6 +20,15 @@ from reporter import ReporterFactory
 
 # Initialize FastAPI
 app = FastAPI(title="SEO Analyzer")
+
+# Add CORS Middleware to allow WebSocket connections from any origin (e.g. 0.0.0.0)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup Folders
 REPORTS_DIR = Path("reports")
