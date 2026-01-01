@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import logging
 from urllib.parse import urlparse, urljoin
 from utils import to_list
@@ -552,7 +553,14 @@ class SEOAnalyzer:
             for col in df.columns:
                 if col.startswith('jsonld_'):
                     val = row.get(col)
-                    if pd.notna(val) and val != '':
+                    # Handle list/array values safely to avoid "The truth value of an array is ambiguous"
+                    is_valid = False
+                    if isinstance(val, (list, pd.Series, np.ndarray)):
+                        is_valid = len(val) > 0
+                    elif pd.notna(val) and val != '':
+                        is_valid = True
+
+                    if is_valid:
                         key = col.replace('jsonld_', '')
                         # Handle potential multi-value fields (advertools uses '@@')
                         # But typically for single page row, it might be a string or list
