@@ -1,4 +1,4 @@
-# 🕷️ TuWorker SEO Analyzer
+# 🕷️ SEO Analyzer
 
 A professional, Python-based Technical SEO Audit tool wrapped in a modern Web Interface.
 
