@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import logging
 from urllib.parse import urlparse, urljoin
-from utils import to_list
-from config import SEOConfig
+from .utils import to_list
+from .config import SEOConfig
 import json
 
 class SEOAnalyzer:

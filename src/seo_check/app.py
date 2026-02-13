@@ -12,11 +12,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
 
-from config import SEOConfig
-from utils import setup_logging
-from crawler import SEOCrawler
-from analyzer import SEOAnalyzer, SEOScorer
-from reporter import ReporterFactory
+from .config import SEOConfig
+from .utils import setup_logging
+from .crawler import SEOCrawler
+from .analyzer import SEOAnalyzer, SEOScorer
+from .reporter import ReporterFactory
 
 # Initialize FastAPI
 app = FastAPI(title="SEO Analyzer")
@@ -31,10 +31,11 @@ app.add_middleware(
 )
 
 # Setup Folders
-REPORTS_DIR = Path("reports")
+REPORTS_DIR = Path.cwd() / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 
-templates = Jinja2Templates(directory="templates")
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # --- WebSocket Manager ---
 class ConnectionManager:
@@ -130,7 +131,8 @@ async def run_analysis_task(url: str, depth: int, timestamp: str):
         await manager.broadcast({"type": "log", "message": "Processing data..."}, timestamp)
 
         analyzer = SEOAnalyzer(config)
-        df = analyzer.load_data(crawl_file)
+        # Use asyncio.to_thread for blocking pandas operations
+        df = await asyncio.to_thread(analyzer.load_data, crawl_file)
 
         if df is None or len(df) == 0:
             logging.error("No data found in crawl file.")
@@ -138,20 +140,21 @@ async def run_analysis_task(url: str, depth: int, timestamp: str):
             await manager.broadcast({"type": "error", "message": "No data found."}, timestamp)
             return
 
-        metrics = analyzer.analyze(df)
+        metrics = await asyncio.to_thread(analyzer.analyze, df)
 
         # Add sitemaps to metrics for reporting
         metrics['sitemaps'] = sitemaps
 
         # 4. Score
         scorer = SEOScorer(config)
-        score, rating, penalties = scorer.calculate(metrics)
+        # Calculate can be CPU intensive if many pages
+        score, rating, penalties = await asyncio.to_thread(scorer.calculate, metrics)
 
         # 5. Report (Force JSON for Web View)
         update_job_status(config.output_dir, "reporting", 90, "Generating report...")
         config.output_format = 'json'
         reporter = ReporterFactory.create_reporter(config, metrics, score, rating, penalties)
-        reporter.generate()
+        await asyncio.to_thread(reporter.generate)
 
         update_job_status(config.output_dir, "completed", 100, "Analysis complete!")
         logging.info("Analysis completed successfully.")

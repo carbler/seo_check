@@ -1,24 +1,30 @@
 import os
 import sys
 import logging
+import argparse
+import asyncio
+import uvicorn
 from rich.console import Console
-from rich.prompt import Prompt, IntPrompt, Confirm
+from rich.prompt import Prompt, IntPrompt
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from config import SEOConfig
-from utils import setup_logging
-from crawler import SEOCrawler
-from analyzer import SEOAnalyzer, SEOScorer
-from reporter import ReporterFactory
+from .config import SEOConfig
+from .utils import setup_logging
+from .crawler import SEOCrawler
+from .analyzer import SEOAnalyzer, SEOScorer
+from .reporter import ReporterFactory
 
 console = Console()
 
 class SEOApplication:
     """Main application facade for the SEO Analyzer."""
 
-    def __init__(self):
+    def __init__(self, url=None, depth=3):
         self.config = SEOConfig()
+        if url:
+            self.config.base_url = url
+        self.config.max_depth = depth
 
     def setup_workspace(self):
         """Creates necessary directories."""
@@ -27,16 +33,18 @@ class SEOApplication:
 
     def get_user_input(self):
         """Interactive CLI for configuration."""
-        console.print(Panel.fit("[bold blue]SEO Analyzer v1.0[/bold blue]", border_style="blue"))
-
-        self.config.base_url = Prompt.ask("[bold green]Enter Target URL[/bold green]", default="https://example.com")
-        self.config.max_depth = IntPrompt.ask("[bold green]Max Crawl Depth[/bold green]", default=3)
+        if not self.config.base_url:
+            console.print(Panel.fit("[bold blue]SEO Analyzer v1.0[/bold blue]", border_style="blue"))
+            self.config.base_url = Prompt.ask("[bold green]Enter Target URL[/bold green]", default="https://example.com")
+            
+            # Solo preguntar depth si no se pasó por argumento
+            self.config.max_depth = IntPrompt.ask("[bold green]Max Crawl Depth[/bold green]", default=3)
 
         # Determine sitemap automatically if possible
         if not self.config.sitemap_url:
             self.config.sitemap_url = self.config.base_url.rstrip('/') + '/sitemap.xml'
 
-    def run(self):
+    async def run(self):
         """Runs the complete SEO analysis workflow."""
         try:
             self.get_user_input()
@@ -50,7 +58,8 @@ class SEOApplication:
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
                 task = progress.add_task("[cyan]Crawling website...", total=None)
                 crawler = SEOCrawler(self.config)
-                crawl_output = crawler.execute()
+                # Crawler execute is async
+                crawl_output = await crawler.execute()
 
             if not crawl_output:
                 console.print("[bold red]❌ Crawl failed or returned no data. Check logs.[/bold red]")
@@ -64,6 +73,8 @@ class SEOApplication:
 
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
                 task = progress.add_task("[cyan]Loading data...", total=None)
+                # Load data is sync, blocking
+                # We could run it in thread pool if large, but for CLI tool sync is ok mostly
                 df = analyzer.load_data(crawl_output)
 
             if df is None or len(df) == 0:
@@ -95,7 +106,7 @@ class SEOApplication:
 [bold]Report:[/bold] {self.config.report_file}
             """, title="Summary", border_style="green"))
 
-            console.print("\n[bold yellow]👉 Open 'viewer.html' in your browser and load the generated JSON file to view the report.[/bold yellow]\n")
+            console.print(f"\n[bold yellow]👉 Run 'seo-check serve' to view the report.[/bold yellow]\n")
 
         except KeyboardInterrupt:
             console.print("\n[bold red]Operation cancelled by user.[/bold red]")
@@ -105,6 +116,34 @@ class SEOApplication:
             logging.exception("Fatal error")
             sys.exit(1)
 
+def cli():
+    parser = argparse.ArgumentParser(description="SEO Check CLI tool")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Command: analyze
+    analyze_parser = subparsers.add_parser("analyze", help="Run SEO analysis on a URL")
+    analyze_parser.add_argument("url", nargs="?", help="Target URL to analyze")
+    analyze_parser.add_argument("--depth", type=int, default=3, help="Maximum crawl depth (default: 3)")
+
+    # Command: serve
+    serve_parser = subparsers.add_parser("serve", help="Start the web server to view reports")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to (default: 127.0.0.1)")
+    serve_parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to (default: 8000)")
+
+    args = parser.parse_args()
+
+    if args.command == "serve":
+        console.print(f"[bold green]Starting server at http://{args.host}:{args.port}[/bold green]")
+        # Import app here to avoid circular dependencies if any, though likely safe at top
+        uvicorn.run("seo_check.app:app", host=args.host, port=args.port, reload=False)
+    
+    else:
+        # Default to analyze (interactive or with args)
+        url = args.url if hasattr(args, 'url') else None
+        depth = args.depth if hasattr(args, 'depth') else 3
+        
+        app_instance = SEOApplication(url=url, depth=depth)
+        asyncio.run(app_instance.run())
+
 if __name__ == "__main__":
-    app = SEOApplication()
-    app.run()
+    cli()

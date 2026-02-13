@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import json
-from config import SEOConfig
-from analyzer import SEOAnalyzer
+from .config import SEOConfig
+from .analyzer import SEOAnalyzer
 
 class SEOReporter(ABC):
     """Abstract base class for SEO reporters."""

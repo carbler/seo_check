@@ -1,6 +1,6 @@
 # 🕷️ SEO Analyzer
 
-A professional, Python-based Technical SEO Audit tool wrapped in a modern Web Interface.
+A professional, Python-based Technical SEO Audit tool wrapped in a modern CLI and Web Interface.
 
 This tool crawls any target website, analyzes critical SEO metrics (On-page, Performance, Links, Content), and generates detailed, interactive reports similar to Semrush or Ahrefs.
 
@@ -35,62 +35,60 @@ This tool crawls any target website, analyzes critical SEO metrics (On-page, Per
     cd seo-analyzer
     ```
 
-2.  **Create a virtual environment (Recommended):**
+2.  **Install the package:**
     ```bash
-    python -m venv myvenv
-    source myvenv/bin/activate  # On Windows: myvenv\Scripts\activate
+    pip install .
     ```
-
-3.  **Install dependencies:**
+    Or for development:
     ```bash
-    pip install -r requirements.txt
+    pip install -e .
     ```
 
 ---
 
 ## 🚦 Usage
 
-### 1. Start the Web Server
-Run the FastAPI application using Uvicorn:
+### CLI Commands
+
+The tool provides a command-line interface `seo-check`.
+
+#### 1. Analyze a Website
+Run a quick analysis directly from your terminal:
 
 ```bash
-python app.py
+seo-check analyze https://example.com --depth 3
 ```
-*Or manually:* `uvicorn app:app --host 0.0.0.0 --port 8000 --reload`
+Or simply run `seo-check analyze` for interactive mode.
 
-### 2. Access the Dashboard
-Open your browser and navigate to:
-👉 **http://localhost:8000**
+#### 2. View Reports (Web Server)
+Start the local web server to view generated reports in a nice dashboard:
 
-### 3. Run an Audit
-1.  Enter the **Target URL** (e.g., `https://example.com`).
-2.  Set the **Max Depth** (e.g., `3` for a quick scan, `10` for deep crawl).
-3.  Click **Analyze**.
-4.  The scan runs in the background. Refresh the page after a few seconds/minutes to see the new report appear in the **Report History**.
-
-### 4. View Report
-Click **"View Report"** on any entry in the history table to open the interactive dashboard.
+```bash
+seo-check serve
+```
+Then open **http://localhost:8000** in your browser.
 
 ---
 
 ## 📂 Project Structure
 
 ```
-├── app.py              # FastAPI Application entry point
-├── config.py           # Configuration & SEO Thresholds
-├── crawler.py          # Crawling logic (advertools)
-├── analyzer.py         # Data processing & Issue detection logic
-├── reporter.py         # Report generation logic (JSON export)
-├── templates/          # HTML Templates (Jinja2)
-│   ├── index.html      # Main Dashboard
-│   └── report.html     # Interactive Report Viewer
-├── reports/            # Generated artifacts (JSON, Logs, Crawl Data)
+├── src/seo_check/      # Source code package
+│   ├── app.py          # FastAPI Application entry point
+│   ├── config.py       # Configuration & SEO Thresholds
+│   ├── crawler.py      # Crawling logic (advertools)
+│   ├── analyzer.py     # Data processing & Issue detection logic
+│   ├── reporter.py     # Report generation logic (JSON export)
+│   ├── main.py         # CLI Entry point
+│   └── templates/      # HTML Templates (Jinja2)
+├── setup.py            # Package installation script
+├── MANIFEST.in         # Package data configuration
 └── requirements.txt    # Project dependencies
 ```
 
 ## ⚙️ Configuration
 
-You can tweak SEO thresholds (e.g., what counts as a "Long Title") directly in `config.py`:
+You can tweak SEO thresholds (e.g., what counts as a "Long Title") directly in `src/seo_check/config.py`:
 
 ```python
 # config.py

@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
-from analyzer import SEOAnalyzer
-from config import SEOConfig
+from seo_check.analyzer import SEOAnalyzer
+from seo_check.config import SEOConfig
 
 @pytest.fixture
 def analyzer():

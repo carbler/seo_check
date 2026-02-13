@@ -9,7 +9,7 @@ import os
 import asyncio
 import re
 from urllib.parse import urlparse, urljoin
-from config import SEOConfig
+from .config import SEOConfig
 
 class SEOCrawler:
     """Handles the website crawling process."""
@@ -108,8 +108,13 @@ class SEOCrawler:
             # Run crawl in a subprocess to avoid Twisted reactor restart issues.
             # Use Popen to read stdout/stderr line by line for realtime updates.
             # Use -u to force unbuffered stdout/stderr
+            
+            # Resolve absolute path to crawl_runner.py relative to this file
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            runner_script = os.path.join(current_dir, 'crawl_runner.py')
+
             process = await asyncio.create_subprocess_exec(
-                sys.executable, '-u', 'crawl_runner.py', config_path,
+                sys.executable, '-u', runner_script, config_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )

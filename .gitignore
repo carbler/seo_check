@@ -11,5 +11,13 @@ __pycache__/
 *.pyc
 myvenv/
 
+# Packaging
+*.egg-info/
+dist/
+build/
+MANIFEST
+
 # System
 .DS_Store
+.agents/
+.pytest_cache/
