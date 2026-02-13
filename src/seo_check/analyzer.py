@@ -393,9 +393,22 @@ class SEOScorer:
     def calculate(self, metrics: dict):
         score = 100.0
         penalties_log = []
+        http_metrics = metrics['http']
+
+        total_pages = http_metrics.get('total', 0)
+        broken_pages = len(http_metrics.get('broken_links', []))
+        server_errors = len(http_metrics.get('server_errors', []))
+        valid_pages = max(total_pages - broken_pages - server_errors, 0)
+        fairness_multiplier = (valid_pages / total_pages) if total_pages else 0.0
+        fairness_multiplier = min(max(fairness_multiplier, 0.0), 1.0)
+
+        def fair_amount(value: float) -> float:
+            if fairness_multiplier <= 0:
+                return 0.0
+            return value * fairness_multiplier
 
         # 1. Broken Links (Critical)
-        broken_rate = metrics['http']['error_rate_4xx']
+        broken_rate = http_metrics['error_rate_4xx']
         if broken_rate > self.config.critical_threshold:
             penalty = self.config.penalty_broken_link
             score -= penalty
@@ -418,13 +431,17 @@ class SEOScorer:
             penalty = self.config.penalty_missing_h1
             # Fairness: reduce penalty if most of these are just 404 pages
             if broken_rate > 0: penalty *= 0.7 
-            score -= penalty
-            penalties_log.append(f"Missing H1 (> {self.config.warning_threshold}%): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing H1 (> {self.config.warning_threshold}%): -{penalty:.1f}")
         elif h1_miss > 0:
             penalty = (h1_miss / self.config.warning_threshold) * self.config.penalty_missing_h1
             penalty = min(penalty, self.config.penalty_missing_h1)
-            score -= penalty
-            penalties_log.append(f"Missing H1 ({h1_miss:.1f}%): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing H1 ({h1_miss:.1f}%): -{penalty:.1f}")
 
         # 3. Titles
         title_miss = metrics['title']['missing_pct']
@@ -432,36 +449,46 @@ class SEOScorer:
             penalty = (title_miss / 100.0) * self.config.penalty_missing_title
             if broken_rate > 0: penalty *= 0.5 # Fairness offset
             penalty = max(penalty, 2.0) 
-            score -= penalty
-            penalties_log.append(f"Missing Titles ({title_miss:.1f}%): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing Titles ({title_miss:.1f}%): -{penalty:.1f}")
 
         dup_title = metrics['title']['duplicate_pct']
         if dup_title > self.config.warning_threshold:
             penalty = self.config.penalty_duplicate_title
-            score -= penalty
-            penalties_log.append(f"Duplicate Titles (> {self.config.warning_threshold}%): -{penalty}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Duplicate Titles (> {self.config.warning_threshold}%): -{penalty}")
 
         # 4. Meta Desc
         meta_miss = metrics['meta']['missing_pct']
         if meta_miss > self.config.warning_threshold:
             penalty = self.config.penalty_missing_meta
             if broken_rate > 0: penalty *= 0.7 # Fairness offset
-            score -= penalty
-            penalties_log.append(f"Missing Meta Desc (> {self.config.warning_threshold}%): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing Meta Desc (> {self.config.warning_threshold}%): -{penalty:.1f}")
         elif meta_miss > 0:
             penalty = (meta_miss / self.config.warning_threshold) * (self.config.penalty_missing_meta / 2.0)
-            score -= penalty
-            penalties_log.append(f"Missing Meta Desc ({meta_miss:.1f}%): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing Meta Desc ({meta_miss:.1f}%): -{penalty:.1f}")
 
         # 5. Images
         img_miss = metrics['images']['missing_pct']
         if img_miss > self.config.warning_threshold:
             penalty = self.config.penalty_missing_alt
-            score -= penalty
-            penalties_log.append(f"Missing Alt Text (> {self.config.warning_threshold}%): -{penalty}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Missing Alt Text (> {self.config.warning_threshold}%): -{penalty}")
 
         # 6. Security (HTTPS & SSL)
-        non_https_pct = (len(metrics['security']['non_https']) / metrics['http']['total'] * 100) if metrics['http']['total'] > 0 else 0
+        non_https_pct = (len(metrics['security']['non_https']) / http_metrics['total'] * 100) if http_metrics['total'] > 0 else 0
         if non_https_pct > 0:
             penalty = (non_https_pct / 100.0) * self.config.penalty_insecure_http
             score -= penalty
@@ -475,12 +502,14 @@ class SEOScorer:
         # 7. Huge Pages
         huge_page_count = len(metrics['performance']['huge_pages'])
         if huge_page_count > 0:
-            total_pages = metrics['http']['total']
+            total_pages = http_metrics['total']
             huge_pct = (huge_page_count / total_pages * 100) if total_pages > 0 else 0
             penalty = (huge_pct / 100.0) * self.config.penalty_huge_page
             penalty = max(penalty, 2.0) # Min penalty if any huge
-            score -= penalty
-            penalties_log.append(f"Huge Pages (> 2MB): -{penalty:.1f}")
+            penalty = fair_amount(penalty)
+            if penalty > 0:
+                score -= penalty
+                penalties_log.append(f"Huge Pages (> 2MB): -{penalty:.1f}")
 
         score = max(0.0, score)
 
