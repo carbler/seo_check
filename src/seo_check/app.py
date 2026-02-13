@@ -70,15 +70,22 @@ manager = ConnectionManager()
 
 def update_job_status(output_dir, stage, percent, message):
     """Updates the status.json file for the frontend poller."""
-    status_file = os.path.join(output_dir, "status.json")
-    data = {
-        "stage": stage,
-        "percent": percent,
-        "message": message,
-        "updated_at": str(datetime.now())
-    }
-    with open(status_file, 'w') as f:
-        json.dump(data, f)
+    try:
+        status_file = os.path.join(output_dir, "status.json")
+        logging.info(f"Updating job status: {status_file} -> {stage} ({percent}%)")
+        data = {
+            "stage": stage,
+            "percent": percent,
+            "message": message,
+            "updated_at": str(datetime.now())
+        }
+        # Use absolute path to be safe
+        abs_status_file = os.path.abspath(status_file)
+        with open(abs_status_file, 'w') as f:
+            json.dump(data, f)
+        logging.info(f"Successfully wrote status to {abs_status_file}")
+    except Exception as e:
+        logging.error(f"Failed to update job status: {e}")
 
 async def run_analysis_task(url: str, depth: int, timestamp: str):
     """Background task to run the full SEO analysis."""
@@ -156,6 +163,7 @@ async def run_analysis_task(url: str, depth: int, timestamp: str):
         reporter = ReporterFactory.create_reporter(config, metrics, score, rating, penalties)
         await asyncio.to_thread(reporter.generate)
 
+        logging.info("Calling final update_job_status for completed state")
         update_job_status(config.output_dir, "completed", 100, "Analysis complete!")
         logging.info("Analysis completed successfully.")
         await manager.broadcast({"type": "complete", "message": "Analysis finished!"}, timestamp)
@@ -225,13 +233,30 @@ async def analyze(url: str = Form(...), depth: int = Form(3), background_tasks: 
 async def get_report_status(report_id: str):
     """API to poll the status of a running job."""
     status_path = REPORTS_DIR / report_id / "status.json"
+    report_path = REPORTS_DIR / report_id / "report.json"
+
+    # Fallback: if status.json is missing but report.json exists, it's completed
     if not status_path.exists():
+        if report_path.exists():
+            return JSONResponse({
+                "stage": "completed", 
+                "percent": 100, 
+                "message": "Analysis complete!",
+                "updated_at": str(datetime.now())
+            })
+            
         if (REPORTS_DIR / report_id).exists():
             return JSONResponse({"stage": "starting", "percent": 0, "message": "Initializing..."})
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    with open(status_path, 'r') as f:
-        return JSONResponse(json.load(f))
+    try:
+        with open(status_path, 'r') as f:
+            return JSONResponse(json.load(f))
+    except Exception as e:
+        logging.error(f"Error reading status file: {e}")
+        if report_path.exists():
+            return JSONResponse({"stage": "completed", "percent": 100, "message": "Analysis finished!"})
+        return JSONResponse({"stage": "starting", "percent": 5, "message": "Loading status..."})
 
 @app.get("/api/reports/{report_id}")
 async def get_report_json(report_id: str):

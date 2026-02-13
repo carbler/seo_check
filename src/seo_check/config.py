@@ -31,9 +31,27 @@ class SEOConfig:
     # NEW: File Size Threshold (2MB)
     max_page_size_bytes: int = 2 * 1024 * 1024
 
-    # Score Thresholds
+    # Score Thresholds (How many failures allowed before penalty triggers)
     critical_threshold: int = 5
     warning_threshold: int = 10
+
+    # Penalty Weights (Points subtracted from 100 base score)
+    # Based on Google Ranking Factors and User Experience best practices.
+    
+    # 1. Critical Technical & Security (Highest Impact)
+    penalty_broken_link: float = 25.0    # UX killer and crawl budget waste.
+    penalty_invalid_ssl: float = 20.0    # Security risk, Google penalizes heavily.
+    penalty_insecure_http: float = 10.0  # Google ranking factor since 2014.
+    
+    # 2. Semantic & Relevance (High Impact)
+    penalty_missing_title: float = 20.0  # Primary ranking factor (on-page).
+    penalty_missing_h1: float = 15.0     # Critical for understanding page topic.
+    penalty_duplicate_title: float = 10.0 # Dilutes ranking signals between pages.
+    
+    # 3. Optimizations & Accessibility (Medium Impact)
+    penalty_missing_meta: float = 10.0   # Affects CTR (Click-Through Rate).
+    penalty_missing_alt: float = 10.0    # Image SEO and accessibility factor.
+    penalty_huge_page: float = 10.0      # Mobile-first index factor (Core Web Vitals).
 
     # Output Configuration
     output_format: str = 'json'

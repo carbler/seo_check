@@ -32,90 +32,258 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-8">
+    <main class="max-w-7xl mx-auto px-6 py-10">
 
-        <!-- URL & Basic Stats -->
-        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Overview</h2>
-            <div class="mb-4">
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">URL</label>
-                <a href="{{ url }}" target="_blank" class="text-blue-600 hover:underline break-all text-lg">{{ url }}</a>
+        <!-- Health Overview -->
+        <div class="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden mb-10">
+            <div class="px-10 py-8 border-b border-slate-50 bg-slate-50/30">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                            <i class="fa-solid fa-link text-indigo-500"></i> Page Resource
+                        </div>
+                        <h1 class="text-2xl font-black text-slate-900 break-all leading-tight">{{ url }}</h1>
+                    </div>
+                    <div class="flex items-center gap-4 shrink-0">
+                        <div class="text-right hidden sm:block">
+                            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Page Health</div>
+                            <div class="font-bold text-slate-900">{{ data.status }}</div>
+                        </div>
+                        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg
+                            {% if 'Critical' in data.status %} bg-rose-500 shadow-rose-200
+                            {% elif 'Warning' in data.status %} bg-amber-500 shadow-amber-200
+                            {% elif 'Notice' in data.status %} bg-indigo-500 shadow-indigo-200
+                            {% else %} bg-emerald-500 shadow-emerald-200 {% endif %}">
+                            <i class="fa-solid {% if 'Critical' in data.status %}fa-heart-crack{% else %}fa-heart-pulse{% endif %} text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6 border-t pt-4">
-                <!-- Status Code -->
-                <div>
-                    <div class="text-xs text-gray-500 uppercase mb-1">Status Code</div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-xl">{{ data.status_code }}</span>
-                        {% if data.status_code == 200 %}
-                            <i class="fa-solid fa-check-circle text-green-500"></i>
-                        {% else %}
-                            <i class="fa-solid fa-circle-exclamation text-red-500"></i>
-                        {% endif %}
-                    </div>
-                </div>
+            <div class="p-10">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-16">
+                    
+                    <!-- Connectivity & Safety -->
+                    <div class="space-y-8">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            Connectivity
+                        </h3>
+                        
+                        <!-- Status -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.status_code == 200 else 'bg-rose-500 animate-pulse' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">HTTP Status</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Response Code</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.status_code == 200 else 'text-rose-500' }} tracking-tight">{{ data.status_code }}</span>
+                            </div>
+                        </div>
 
-                <!-- Word Count -->
-                <div>
-                    <div class="text-xs text-gray-500 uppercase mb-1">Word Count</div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-xl">{{ data.words }}</span>
-                        {% if data.words >= config.min_word_count %}
-                            <i class="fa-solid fa-check-circle text-green-500"></i>
-                        {% else %}
-                            <i class="fa-solid fa-triangle-exclamation text-yellow-500"></i>
-                        {% endif %}
-                    </div>
-                    <div class="text-xs text-gray-400 mt-1">Target: > {{ config.min_word_count }}</div>
-                </div>
+                        <!-- Security -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.is_https and data.ssl_valid else 'bg-rose-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Security</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">SSL / Encryption</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <span class="text-sm font-black {{ 'text-emerald-600' if data.is_https and data.ssl_valid else 'text-rose-600' }} tracking-widest">{{ 'SECURE' if data.is_https and data.ssl_valid else ('INVALID' if data.is_https else 'UNSECURE') }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{{ 'HTTPS Cert' if data.is_https else 'HTTP Plain' }}</span>
+                            </div>
+                        </div>
 
-                <!-- Page Size -->
-                <div>
-                    <div class="text-xs text-gray-500 uppercase mb-1">Page Size</div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-xl">{{ (data.size / 1024)|round(1) }} KB</span>
-                        {% if data.size <= config.max_page_size_bytes %}
-                            <i class="fa-solid fa-check-circle text-green-500"></i>
-                        {% else %}
-                            <i class="fa-solid fa-circle-exclamation text-red-500"></i>
-                        {% endif %}
+                        <!-- Architecture -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.depth <= 3 else 'bg-amber-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">URL Depth</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Site Hierarchy</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.depth <= 3 else 'text-amber-500' }} tracking-tight">{{ data.depth }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Recommended <= 3</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="text-xs text-gray-400 mt-1">Limit: < {{ (config.max_page_size_bytes / 1024 / 1024)|round(0) }} MB</div>
-                </div>
 
-                <!-- Load Time -->
-                <div>
-                    <div class="text-xs text-gray-500 uppercase mb-1">Load Time</div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono font-bold text-xl">{{ data.load_time|round(3) }}s</span>
-                        {% if data.load_time <= config.slow_page_threshold %}
-                            <i class="fa-solid fa-check-circle text-green-500"></i>
-                        {% else %}
-                            <i class="fa-solid fa-triangle-exclamation text-yellow-500"></i>
-                        {% endif %}
+                    <!-- Content Metrics -->
+                    <div class="space-y-8">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Content Quality
+                        </h3>
+                        
+                        <!-- Word Count -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.words >= config.min_word_count else 'bg-amber-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Word Count</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Copy length</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.words >= config.min_word_count else 'text-amber-500' }} tracking-tight">{{ data.words }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Target > {{ config.min_word_count }}</span>
+                            </div>
+                        </div>
+
+                        <!-- H1 -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.h1_count == 1 else 'bg-rose-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">H1 Headers</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Main Topic Tag</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.h1_count == 1 else 'text-rose-500' }} tracking-tight">{{ data.h1_count }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Target exactly 1</span>
+                            </div>
+                        </div>
+
+                        <!-- Titles -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.title_len >= config.title_min_length and data.title_len <= config.title_max_length else 'bg-amber-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Title Length</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pixel Space</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.title_len >= config.title_min_length and data.title_len <= config.title_max_length else 'text-amber-500' }} tracking-tight">{{ data.title_len }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{{ config.title_min_length }}-{{ config.title_max_length }} chars</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="text-xs text-gray-400 mt-1">Target: < {{ config.slow_page_threshold }}s</div>
+
+                    <!-- Technical & Social -->
+                    <div class="space-y-8">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                            On-Page Technical
+                        </h3>
+                        
+                        <!-- Page Size -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.size <= config.max_page_size_bytes else 'bg-rose-500' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Page Weight</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Total Size</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-lg font-black {{ 'text-emerald-500' if data.size <= config.max_page_size_bytes else 'text-rose-500' }} tracking-tight">{{ (data.size / 1024)|round(1) }} KB</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Max 2MB</span>
+                            </div>
+                        </div>
+
+                        <!-- Schema -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.has_schema else 'bg-slate-300' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Schema Data</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">JSON-LD</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-sm font-black {{ 'text-emerald-500' if data.has_schema else 'text-slate-400' }} tracking-widest">{{ 'PRESENT' if data.has_schema else 'MISSING' }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Rich Results</span>
+                            </div>
+                        </div>
+
+                        <!-- Social -->
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.og_title else 'bg-slate-300' }}"></div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">Social Tags</div>
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Open Graph</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end text-right">
+                                <span class="text-sm font-black {{ 'text-emerald-500' if data.og_title else 'text-slate-400' }} tracking-widest">{{ 'OPTIMIZED' if data.og_title else 'MISSING' }}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Twitter/FB</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Issues -->
         {% if data.issues %}
-        <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border-l-4 border-red-500">
-            <h2 class="text-lg font-semibold text-red-700 mb-4">Issues Detected</h2>
-            <ul class="space-y-3">
-                {% for issue in data.issues %}
-                <li class="text-gray-700">
-                    <div class="flex items-center gap-2 font-medium">
-                        <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
-                        {% set issue_name = issue.split(':')[0] %}
-                        <span>{{ issue }}</span>
+        <div class="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden mb-10">
+            <div class="bg-rose-50/50 px-10 py-6 border-b border-rose-100 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-200">
+                        <i class="fa-solid fa-triangle-exclamation text-sm"></i>
                     </div>
-                    <!-- Issue Description Lookup Logic could go here if passed completely -->
-                </li>
-                {% endfor %}
-            </ul>
+                    <h2 class="text-xl font-black text-rose-900 tracking-tight uppercase">Critical Improvements</h2>
+                </div>
+                <span class="bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-sm" x-text="{{ data.issues|length }}"></span>
+            </div>
+            
+            <div class="p-10">
+                {% if data.status_code == 404 and data.error_msg %}
+                <div class="mb-10 p-8 bg-rose-50 rounded-3xl border border-rose-100 flex gap-6 items-start">
+                    <div class="w-14 h-14 rounded-2xl bg-white flex-shrink-0 flex items-center justify-center text-rose-600 shadow-sm">
+                        <i class="fa-solid fa-server text-xl"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-black mb-1 text-lg text-rose-900 tracking-tight uppercase">Server Response Failure</div>
+                        <div class="text-rose-700 font-medium leading-relaxed">
+                            <strong>Status:</strong> 404 Not Found<br>
+                            <strong>Message:</strong> {{ data.error_msg }}
+                            {% if data.server %}<span class="text-xs opacity-60 ml-2">({{ data.server }})</span>{% endif %}
+                        </div>
+                        <div class="mt-4 text-xs font-medium text-rose-600/70 leading-relaxed max-w-2xl italic">
+                            This is a "hard" error from your infrastructure. Search engines cannot index this content and users will see a broken page. Check your server routing or S3 bucket configuration.
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not data.ssl_valid and data.is_https %}
+                <div class="mb-10 p-8 bg-rose-50 rounded-3xl border border-rose-100 flex gap-6 items-start animate-in zoom-in duration-500">
+                    <div class="w-14 h-14 rounded-2xl bg-white flex-shrink-0 flex items-center justify-center text-rose-600 shadow-sm">
+                        <i class="fa-solid fa-shield-halved text-xl"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-black mb-1 text-lg text-rose-900 tracking-tight uppercase">Security Certificate Violation</div>
+                        <div class="text-rose-700 font-medium leading-relaxed">
+                            <strong>SSL Status:</strong> Invalid / Verification Failed<br>
+                            <strong>Details:</strong> {{ data.ssl_error }}
+                        </div>
+                        <div class="mt-4 text-xs font-medium text-rose-600/70 leading-relaxed max-w-2xl italic">
+                            Your site uses HTTPS but the certificate could not be verified. Browsers will block access or show scary warnings to your users. This is a critical SEO penalty.
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 gap-4">
+                    {% for issue in data.issues %}
+                    <div class="group flex items-center gap-4 p-5 rounded-2xl border border-slate-50 hover:border-rose-100 hover:bg-rose-50/20 transition-all">
+                        <div class="w-2 h-2 rounded-full bg-rose-400 group-hover:scale-150 transition-transform"></div>
+                        <span class="text-slate-700 font-bold text-lg tracking-tight">{{ issue }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
         {% endif %}
 

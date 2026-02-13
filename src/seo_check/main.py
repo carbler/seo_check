@@ -134,8 +134,8 @@ def cli():
 
     if args.command == "serve":
         console.print(f"[bold green]Starting server at http://{args.host}:{args.port}[/bold green]")
-        # Import app here to avoid circular dependencies if any, though likely safe at top
-        uvicorn.run("seo_check.app:app", host=args.host, port=args.port, reload=False)
+        # Enable reload=True by default to catch code changes during development
+        uvicorn.run("seo_check.app:app", host=args.host, port=args.port, reload=True)
     
     else:
         # Default to analyze (interactive or with args)

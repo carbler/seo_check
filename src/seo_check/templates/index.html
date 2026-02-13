@@ -2,103 +2,154 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SEO Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-[#f8fafc] text-slate-800">
 
-    <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto px-6 py-12">
 
         <!-- Header -->
-        <div class="flex items-center gap-3 mb-8">
-            <i class="fa-solid fa-chart-line text-blue-600 text-3xl"></i>
-            <h1 class="text-3xl font-bold text-gray-900">SEO Analyzer Dashboard</h1>
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 rotate-3">
+                    <i class="fa-solid fa-bolt-lightning text-white text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-black text-slate-900 tracking-tight">SEO Analyzer</h1>
+                    <p class="text-slate-500 font-medium">Technical Audit & Growth Insights</p>
+                </div>
+            </div>
+            
+            <button onclick="window.location.reload()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition shadow-sm font-semibold text-sm self-start">
+                <i class="fa-solid fa-rotate-right"></i> Refresh Dashboard
+            </button>
         </div>
 
         <!-- Notification -->
         {% if request.query_params.get("status") == "started" %}
-        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
-            <p class="font-bold">Analysis Started!</p>
-            <p>The crawl is running in the background. Refresh this page in a minute to see the new report.</p>
+        <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 p-5 rounded-2xl mb-8 flex gap-4 items-center animate-pulse" role="alert">
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+            </div>
+            <div>
+                <p class="font-bold">Analysis in Progress!</p>
+                <p class="text-sm opacity-90 font-medium">The crawl is running. Your report will appear in the history below in a moment.</p>
+            </div>
         </div>
         {% endif %}
 
-        <!-- Analysis Form -->
-        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">Start New Audit</h2>
-            <form action="/analyze" method="post" class="flex flex-col md:flex-row gap-4 items-end">
-                <div class="flex-1 w-full">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Target URL</label>
-                    <input type="url" name="url" placeholder="https://example.com" required
-                           class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Analysis Form -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 sticky top-8 border border-slate-100">
+                    <h2 class="text-xl font-bold mb-6 text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass text-indigo-500"></i>
+                        New Audit
+                    </h2>
+                    <form action="/analyze" method="post" class="space-y-5">
+                        <div>
+                            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Target URL</label>
+                            <input type="url" name="url" placeholder="https://example.com" required
+                                   class="w-full bg-slate-50 border-transparent rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-4 transition-all outline-none text-slate-900 font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Max Crawl Depth</label>
+                            <div class="relative">
+                                <input type="number" name="depth" value="3" min="1" max="10"
+                                       class="w-full bg-slate-50 border-transparent rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-4 transition-all outline-none text-slate-900 font-medium">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">levels</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white p-4 rounded-2xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 font-bold text-lg flex items-center justify-center gap-2 group">
+                            Start Scan
+                            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </button>
+                    </form>
+                    
+                    <div class="mt-8 pt-8 border-t border-slate-50 text-center">
+                        <p class="text-xs text-slate-400 font-medium leading-relaxed italic">
+                            Powered by gemini-3-flash & advertools
+                        </p>
+                    </div>
                 </div>
-                <div class="w-full md:w-32">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Depth</label>
-                    <input type="number" name="depth" value="3" min="1" max="10"
-                           class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-                </div>
-                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition font-medium w-full md:w-auto">
-                    Analyze
-                </button>
-            </form>
-        </div>
-
-        <!-- History Table -->
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                <h2 class="text-lg font-semibold text-gray-700">Report History</h2>
-                <button onclick="window.location.reload()" class="text-sm text-blue-600 hover:underline">
-                    <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
-                </button>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target URL</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pages</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        {% for report in reports %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {{ report.date[:19] }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {{ report.url }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {{ report.pages }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                    {% if report.score >= 90 %} bg-green-100 text-green-800
-                                    {% elif report.score >= 50 %} bg-yellow-100 text-yellow-800
-                                    {% else %} bg-red-100 text-red-800 {% endif %}">
-                                    {{ report.score | round(1) }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <a href="/report/{{ report.id }}" class="text-blue-600 hover:text-blue-900 flex items-center justify-end gap-1">
-                                    View Report <i class="fa-solid fa-arrow-right"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="px-6 py-10 text-center text-gray-500">
-                                No reports found. Start an analysis above.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <!-- History Table -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+                    <div class="px-8 py-6 border-b border-slate-50 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+                            Recent Audits
+                        </h2>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-slate-50/50">
+                                    <th class="px-8 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Target</th>
+                                    <th class="px-8 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Stats</th>
+                                    <th class="px-8 py-4 text-center text-xs font-black text-slate-400 uppercase tracking-widest">Score</th>
+                                    <th class="px-8 py-4 text-right"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                {% for report in reports %}
+                                <tr class="hover:bg-indigo-50/30 transition-colors group">
+                                    <td class="px-8 py-6">
+                                        <div class="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[240px]">
+                                            {{ report.url }}
+                                        </div>
+                                        <div class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tight">
+                                            {{ report.date[:16].replace('T', ' ') }}
+                                        </div>
+                                    </td>
+                                    <td class="px-8 py-6">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex flex-col">
+                                                <span class="text-slate-900 font-black">{{ report.pages }}</span>
+                                                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Pages</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-8 py-6 text-center">
+                                        <div class="inline-flex flex-col items-center">
+                                            <span class="text-lg font-black {{ 'text-emerald-500' if report.score >= 90 else ('text-amber-500' if report.score >= 50 else 'text-rose-500') }}">
+                                                {{ report.score | round(0) }}
+                                            </span>
+                                            <div class="w-8 h-1 rounded-full mt-1 {{ 'bg-emerald-100' if report.score >= 90 else ('bg-amber-100' if report.score >= 50 else 'bg-rose-100') }}"></div>
+                                        </div>
+                                    </td>
+                                    <td class="px-8 py-6 text-right">
+                                        <a href="/report/{{ report.id }}" class="inline-flex items-center justify-center w-10 h-10 bg-slate-100 text-slate-500 rounded-xl hover:bg-indigo-600 hover:text-white transition shadow-sm">
+                                            <i class="fa-solid fa-chevron-right text-sm"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="px-8 py-20 text-center">
+                                        <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <i class="fa-solid fa-folder-open text-slate-200 text-3xl"></i>
+                                        </div>
+                                        <p class="text-slate-400 font-bold">No audits found yet.</p>
+                                        <p class="text-sm text-slate-300 mt-1">Submit a URL to start your first analysis.</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 
