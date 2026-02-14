@@ -40,21 +40,25 @@ class SEOAnalyzer:
         if df.empty or 'url' not in df.columns:
             return self._get_empty_metrics()
 
+        # Create a filtered dataframe for semantic checks (only valid 200 OK pages)
+        # This prevents 404/500 pages from triggering "Missing H1", "Duplicate Title", etc.
+        df_valid = df[df['status'] == 200].copy() if 'status' in df.columns else df
+
         # Execute Checks
         try:
             metrics['http'] = analyze_http_status(df)
-            metrics['h1'] = analyze_h1_tags(df)
-            metrics['title'] = analyze_titles(df, self.config)
-            metrics['meta'] = analyze_meta_desc(df, self.config)
-            metrics['canonical'] = analyze_canonical(df)
-            metrics['images'] = analyze_images(df)
+            metrics['h1'] = analyze_h1_tags(df_valid)
+            metrics['title'] = analyze_titles(df_valid, self.config)
+            metrics['meta'] = analyze_meta_desc(df_valid, self.config)
+            metrics['canonical'] = analyze_canonical(df_valid)
+            metrics['images'] = analyze_images(df_valid)
             metrics['links'] = analyze_links(df, self.config)
             metrics['security'] = analyze_security(df)
-            metrics['performance'] = analyze_performance(df, self.config)
-            metrics['social'] = analyze_social_tags(df)
-            metrics['schema'] = analyze_schema_presence(df)
+            metrics['performance'] = analyze_performance(df_valid, self.config)
+            metrics['social'] = analyze_social_tags(df_valid)
+            metrics['schema'] = analyze_schema_presence(df_valid)
             metrics['structure'] = analyze_url_structure(df)
-            metrics['content'] = analyze_content_quality(df, self.config)
+            metrics['content'] = analyze_content_quality(df_valid, self.config)
         except Exception as e:
             logging.error(f"Error during analysis checks: {e}")
             # Continue with whatever metrics we gathered or empty ones
@@ -395,18 +399,6 @@ class SEOScorer:
         penalties_log = []
         http_metrics = metrics['http']
 
-        total_pages = http_metrics.get('total', 0)
-        broken_pages = len(http_metrics.get('broken_links', []))
-        server_errors = len(http_metrics.get('server_errors', []))
-        valid_pages = max(total_pages - broken_pages - server_errors, 0)
-        fairness_multiplier = (valid_pages / total_pages) if total_pages else 0.0
-        fairness_multiplier = min(max(fairness_multiplier, 0.0), 1.0)
-
-        def fair_amount(value: float) -> float:
-            if fairness_multiplier <= 0:
-                return 0.0
-            return value * fairness_multiplier
-
         # 1. Broken Links (Critical)
         broken_rate = http_metrics['error_rate_4xx']
         if broken_rate > self.config.critical_threshold:
@@ -420,72 +412,52 @@ class SEOScorer:
             score -= penalty
             penalties_log.append(f"Broken Links ({broken_rate:.1f}%): -{penalty:.1f}")
 
-        # Note: To be more "fair", we should base content penalties ONLY on valid pages (status 200)
-        # However, the metrics dictionary already has the percentages calculated by the check functions.
-        # Ideally, those check functions in src/seo_check/checks/*.py should only count 200 pages.
-        # But for now, we will apply a "Fairness Offset" if there are many broken links.
-        
+        # Note: Content penalties are now based on valid pages (status 200) only,
+        # thanks to filtering in SEOAnalyzer.analyze().
+
         # 2. H1
         h1_miss = metrics['h1']['missing_pct']
         if h1_miss > self.config.warning_threshold:
             penalty = self.config.penalty_missing_h1
-            # Fairness: reduce penalty if most of these are just 404 pages
-            if broken_rate > 0: penalty *= 0.7 
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing H1 (> {self.config.warning_threshold}%): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Missing H1 (> {self.config.warning_threshold}%): -{penalty:.1f}")
         elif h1_miss > 0:
             penalty = (h1_miss / self.config.warning_threshold) * self.config.penalty_missing_h1
             penalty = min(penalty, self.config.penalty_missing_h1)
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing H1 ({h1_miss:.1f}%): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Missing H1 ({h1_miss:.1f}%): -{penalty:.1f}")
 
         # 3. Titles
         title_miss = metrics['title']['missing_pct']
         if title_miss > 0:
             penalty = (title_miss / 100.0) * self.config.penalty_missing_title
-            if broken_rate > 0: penalty *= 0.5 # Fairness offset
             penalty = max(penalty, 2.0) 
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing Titles ({title_miss:.1f}%): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Missing Titles ({title_miss:.1f}%): -{penalty:.1f}")
 
         dup_title = metrics['title']['duplicate_pct']
         if dup_title > self.config.warning_threshold:
             penalty = self.config.penalty_duplicate_title
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Duplicate Titles (> {self.config.warning_threshold}%): -{penalty}")
+            score -= penalty
+            penalties_log.append(f"Duplicate Titles (> {self.config.warning_threshold}%): -{penalty}")
 
         # 4. Meta Desc
         meta_miss = metrics['meta']['missing_pct']
         if meta_miss > self.config.warning_threshold:
             penalty = self.config.penalty_missing_meta
-            if broken_rate > 0: penalty *= 0.7 # Fairness offset
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing Meta Desc (> {self.config.warning_threshold}%): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Missing Meta Desc (> {self.config.warning_threshold}%): -{penalty:.1f}")
         elif meta_miss > 0:
             penalty = (meta_miss / self.config.warning_threshold) * (self.config.penalty_missing_meta / 2.0)
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing Meta Desc ({meta_miss:.1f}%): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Missing Meta Desc ({meta_miss:.1f}%): -{penalty:.1f}")
 
         # 5. Images
         img_miss = metrics['images']['missing_pct']
         if img_miss > self.config.warning_threshold:
             penalty = self.config.penalty_missing_alt
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Missing Alt Text (> {self.config.warning_threshold}%): -{penalty}")
+            score -= penalty
+            penalties_log.append(f"Missing Alt Text (> {self.config.warning_threshold}%): -{penalty}")
 
         # 6. Security (HTTPS & SSL)
         non_https_pct = (len(metrics['security']['non_https']) / http_metrics['total'] * 100) if http_metrics['total'] > 0 else 0
@@ -506,10 +478,8 @@ class SEOScorer:
             huge_pct = (huge_page_count / total_pages * 100) if total_pages > 0 else 0
             penalty = (huge_pct / 100.0) * self.config.penalty_huge_page
             penalty = max(penalty, 2.0) # Min penalty if any huge
-            penalty = fair_amount(penalty)
-            if penalty > 0:
-                score -= penalty
-                penalties_log.append(f"Huge Pages (> 2MB): -{penalty:.1f}")
+            score -= penalty
+            penalties_log.append(f"Huge Pages (> 2MB): -{penalty:.1f}")
 
         score = max(0.0, score)
 

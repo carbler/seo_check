@@ -1,4 +1,4 @@
- # AGENTS.md
+# AGENTS.md
 
 > **Purpose:** This file guides AI agents and developers working on the `seo_check` repository. It defines the approved workflow, commands, and style norms required to ship reliable SEO reporting.
 
@@ -15,17 +15,23 @@ All work happens from the repository root. Install runtime dependencies in edita
 ```bash
 pip install -e .
 ```
-For ad-hoc testing or development, ensure `pytest`, `httpx`, and other extras referenced in `pyproject.toml` are installed by re-running the command.
+For development, ensure `pytest`, `httpx`, and other extras referenced in `pyproject.toml` are installed.
 
 ### CLI vs Web Modes
 **CLI mode** exposes `python -m seo_check.main analyze <URL>` plus a `serve` command for lightweight dashboards.
 ```bash
+# Analyze a site
 python -m seo_check.main analyze https://example.com --depth 2
+
+# View help
 python -m seo_check.main --help
 ```
+
 **Web server mode** launches the FastAPI renderer. Use hot reload locally:
 ```bash
+# Serve the dashboard
 python -m seo_check.main serve
+# OR direct uvicorn launch
 uvicorn seo_check.app:app --reload
 ```
 
@@ -37,28 +43,47 @@ python -m build
 Verify the generated distributions in `dist/` before tagging a release.
 
 ### Testing
-Pytest is the lone testing framework. The config in `pyproject.toml` already applies `-v --tb=short`.
+Pytest is the testing framework. Configuration in `pyproject.toml` applies `-v --tb=short`.
+
+**Run all tests:**
 ```bash
 pytest
+```
+
+**Run a specific test file:**
+```bash
 pytest tests/test_analyzer.py
+```
+
+**Run a single test case (Critical for targeted debugging):**
+```bash
 pytest tests/test_analyzer.py::test_analyzer_happy_path
 ```
-To rerun a targeted test, specify the file and test name:
-```bash
-pytest tests/test_cli.py::test_cli_entry
-```
-Capture logs or prints with `-s`, duplicate output with `-v`, and run failing tests in isolation for reliability.
 
-### Linting & Formatting
-No automated linter or formatter is enforced, but the repository follows strict **PEP 8**/type-safe conventions.
-- **Imports:** Grouped in 3 blocks—standard library, third-party, local package—and alphabetized within each group.
-- **Indentation:** 4 spaces per level, no tabs.
-- **Line length:** Favor readability (~100 char max). Use implicit continuations for longer structures.
+**Test Categories:**
+- **Unit:** `tests/test_analyzer.py` (Mocks DataFrames to test logic without crawling)
+- **Integration:** `tests/test_cli.py` (Tests CLI arguments and outputs)
+- **Service:** `tests/test_integrations.py` (Tests external API integrations)
+
+### Manual Verification
+For verifying WebSocket connectivity without a browser, use the included utility script:
+```bash
+python src/seo_check/verify_ws_connection.py
+```
 
 ## 3. Code Style & Guidelines
 
+### Linting & Formatting
+No automated linter or formatter is enforced in CI, but the repository follows strict **PEP 8** conventions.
+- **Indentation:** 4 spaces per level, no tabs.
+- **Line length:** Favor readability (~100 char max). Use implicit continuations for longer structures.
+- **Imports:** Must be grouped in 3 blocks and alphabetized within each group:
+  1. Standard Library (`import json`, `import logging`)
+  2. Third-Party (`import pandas as pd`, `import uvicorn`)
+  3. Local Application (`from .config import SEOConfig`, `from .utils import to_list`)
+
 ### Type Hints & Documentation
-- **Typing:** Mandatory for functions/methods; prefer `typing.Dict`, `List`, `Optional`, `Any`, `Tuple` from `typing`.
+- **Typing:** Mandatory for all functions and methods. Use `typing` generics (`List`, `Dict`, `Optional`, `Any`) or built-ins (`list`, `dict`) consistently.
   ```python
   def calculate_score(self, metrics: Dict[str, Any]) -> Tuple[float, str]:
       ...
@@ -73,23 +98,24 @@ No automated linter or formatter is enforced, but the repository follows strict 
 - Classes: `PascalCase` (`SEOAnalyzer`, `ReporterFactory`).
 - Functions/methods/variables: `snake_case` (`analyze_http_status`, `broken_links`).
 - Constants: `UPPER_CASE` with descriptive names (`DEFAULT_TIMEOUT`).
-- Private helpers: prefixed with `_`.
+- Private helpers: prefixed with `_` (`_categorize_issues`).
 
 ### Error Handling & Logging
 - Use `logging` instead of `print` in library code. Log exceptions with context.
   ```python
-  logging.error("Fetch failed", exc_info=True)
+  try:
+      df = pd.read_json(crawl_file, lines=True)
+  except Exception as e:
+      logging.error(f"Error loading data: {e}", exc_info=True)
+      return pd.DataFrame()
   ```
 - CLI feedback is rendered through `rich.console.Console()` for consistent colors/status.
-- Catch only the specific exceptions you can remediate; bubble others to the CLI/web layer.
+- Catch only specific exceptions you can remediate; bubble others to the CLI/web layer.
 
 ### Async vs Blocking
-- Async functions (crawler, FastAPI) must stay async; heavy Pandas workloads run inside `asyncio.to_thread`.
+- Async functions (crawler, FastAPI) must stay async.
+- Heavy Pandas workloads run inside `asyncio.to_thread` to avoid blocking the event loop.
 - Keep blocking operations within sync helpers to avoid thread starvation.
-
-### Scoring Fairness (Analyzer)
-- The scoring routine in `analyzer.calculate()` applies a fairness multiplier so 404/5xx pages do not over-inflate semantic penalties (titles, H1, metadata, alt text, etc.). Respect the multiplier when adding new penalties.
-- Critical penalties (broken links, SSL) remain untampered: they still impact the total per config thresholds.
 
 ## 4. Architecture & Patterns
 
@@ -109,31 +135,24 @@ No automated linter or formatter is enforced, but the repository follows strict 
 4. `SEOScorer` applies thresholds + fairness offsets to compute a 0-100 score.
 5. `ReporterFactory` emits JSON/HTML for CLI output or the `/report/<id>` endpoint.
 
-## 5. File System Practices
-- Favor `pathlib.Path` for paths.
-- Report/state files live under `reports/<timestamp>/`; CLI/web share the same structure.
-- Always confirm the parent directory exists before writing.
+### Scoring Fairness (Analyzer)
+- The analyzer filters the crawl data (`df_valid = df[df['status'] == 200]`) before running semantic checks (H1, Titles, Meta, Content, etc.).
+- This ensures that 404/5xx pages do not trigger semantic penalties (missing titles, H1, metadata, etc.), preventing "double jeopardy" where a broken page is penalized twice.
+- **Rule:** When adding new semantic checks, ensure they use `df_valid` unless they specifically need to analyze broken pages.
+- Critical penalties (broken links, SSL invalidity) remain separate and are calculated on the full dataset.
 
-## 6. Testing Strategy
-- Unit tests (mainly `tests/test_analyzer.py`) mock a small DataFrame to exercise classification logic.
-- Integration tests (`tests/test_cli.py`, `tests/test_integrations.py`) validate CLI API and service output structure.
-- Use fixtures for shared crawl data; avoid disk IO when possible.
+## 5. File System Practices
+- Favor `pathlib.Path` over `os.path`.
+- Report/state files live under `reports/<timestamp>/`; CLI/web share the same structure.
+- Always confirm the parent directory exists before writing using `path.parent.mkdir(parents=True, exist_ok=True)`.
+
+## 6. Release & Commit Workflow
+- **Changes:** Run `git status` and `git diff` before staging.
+- **Commits:** One commit per logical change. Message format: `type: description` (e.g., `fix: Handle fairness logic for partially crawled sites`).
+- **Versioning:** Tag the branch with semantic versioning (e.g., `v0.1.3`) for production releases.
+- **Verification:** Before pushing, run the relevant tests. Never push broken code to `main`.
+- **Security:** Never commit secrets, API keys, or generated artifacts (`*.pyc`, `dist/`).
 
 ## 7. Cursor & Copilot Rules
 - There are no `.cursor` or `.cursorrules/` directives in this repository.
 - No `.github/copilot-instructions.md` exists; default to best practices noted here.
-
-## 8. Release & Commit Workflow
-- When you make changes, `git status` then `git diff` before staging.
-- Commit once per logical change. Message should focus on *why* (e.g., “Make scoring fairer for partially crawled sites”).
-- Tag the branch with semantic versioning (e.g., `v0.1.3`) if the change goes to production.
-- Before pushing, run the necessary tests (`pytest tests/<file>::<test>`). Push to `origin/main` (or the deployment target) after successful tests.
-- Never commit secrets or generated artifacts (pip wheel, `*.pyc`).
-
-## 9. Troubleshooting & Tips
-- Use `python -m seo_check.main analyze` plus `--depth` to replicate issues before touching scoring logic.
-- Inspect `reports/<timestamp>/report.json` to see the final score/penalties to cross-check fairness tweaks.
-- If you add a new check, update the alignments in `metrics['issues']` to ensure per-page diagnostics keep working.
-
-----
-*Updated for AI Agent Context - 2026*
