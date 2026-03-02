@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import json
+import math
 from .config import SEOConfig
 from .analyzer import SEOAnalyzer
 
@@ -28,7 +29,9 @@ class JSONReporter(SEOReporter):
 
         def convert_numpy(obj):
             if hasattr(obj, 'item'):
-                return obj.item()
+                obj = obj.item()
+            if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+                return None
             if isinstance(obj, dict):
                 return {k: convert_numpy(v) for k, v in obj.items()}
             if isinstance(obj, list):
