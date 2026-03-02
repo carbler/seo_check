@@ -1,7 +1,17 @@
+import asyncio
 import pytest
 import pandas as pd
+from unittest.mock import patch
 from seo_check.analyzer import SEOAnalyzer
 from seo_check.config import SEOConfig
+from seo_check.checks.indexability import analyze_indexability
+from seo_check.checks.robots import analyze_robots_txt
+from seo_check.checks.duplicates import analyze_duplicate_content
+from seo_check.checks.mixed_content import analyze_mixed_content
+from seo_check.checks.anchors import analyze_anchor_text
+from seo_check.checks.headers import analyze_response_headers
+from seo_check.checks.url_quality import analyze_url_quality
+from seo_check.checks.hreflang import analyze_hreflang
 
 @pytest.fixture
 def analyzer():
@@ -104,3 +114,195 @@ def test_analyzer_empty_dataframe(analyzer):
 
     assert metrics['http']['total'] == 0
     assert metrics['h1']['total'] == 0
+
+
+# ---------------------------------------------------------------------------
+# New checks — unit tests
+# ---------------------------------------------------------------------------
+
+def test_indexability_noindex_detection():
+    """Pages with meta_robots='noindex' should be flagged."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/a', 'https://example.com/b', 'https://example.com/c'],
+        'status': [200, 200, 200],
+        'meta_robots': ['noindex, nofollow', 'index, follow', ''],
+    })
+    result = analyze_indexability(df)
+    assert 'https://example.com/a' in result['noindex_pages']
+    assert 'https://example.com/b' not in result['noindex_pages']
+    assert 'https://example.com/a' in result['nofollow_pages']
+    assert result['noindex_pct'] == pytest.approx(100 / 3, rel=0.01)
+
+
+def test_indexability_x_robots_noindex():
+    """Pages with X-Robots-Tag: noindex should appear in x_robots_noindex."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/x', 'https://example.com/y'],
+        'status': [200, 200],
+        'resp_headers_X-Robots-Tag': ['noindex', ''],
+    })
+    result = analyze_indexability(df)
+    assert 'https://example.com/x' in result['x_robots_noindex']
+    assert 'https://example.com/x' in result['noindex_pages']
+    assert 'https://example.com/y' not in result['x_robots_noindex']
+
+
+def test_robots_disallow():
+    """URLs blocked by robots.txt should appear in disallowed_urls."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/', 'https://example.com/private/'],
+        'status': [200, 200],
+    })
+    with patch('urllib.robotparser.RobotFileParser.read'):
+        with patch('urllib.robotparser.RobotFileParser.can_fetch', side_effect=lambda ua, url: '/private/' not in url):
+            result = analyze_robots_txt(df, 'https://example.com', user_agent='*')
+
+    assert result['robots_fetched'] is True
+    assert 'https://example.com/private/' in result['disallowed_urls']
+    assert 'https://example.com/' not in result['disallowed_urls']
+    assert result['disallowed_count'] == 1
+
+
+def test_duplicate_content_detection():
+    """Two pages sharing the same body text hash should be flagged."""
+    shared_text = 'a ' * 600  # 600 words, well over 100 chars
+    df = pd.DataFrame({
+        'url': ['https://example.com/p1', 'https://example.com/p2', 'https://example.com/p3'],
+        'status': [200, 200, 200],
+        'page_body_text': [shared_text, shared_text, 'completely different content ' * 50],
+    })
+    result = analyze_duplicate_content(df)
+    assert len(result['duplicate_groups']) == 1
+    group = list(result['duplicate_groups'].values())[0]
+    assert 'https://example.com/p1' in group
+    assert 'https://example.com/p2' in group
+    assert 'https://example.com/p3' not in result['duplicate_urls']
+    assert result['duplicate_pct'] == pytest.approx(200 / 3, rel=0.01)
+
+
+def test_duplicate_content_skips_short_pages():
+    """Pages with fewer than 100 characters should not be considered for duplicate check."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/empty1', 'https://example.com/empty2'],
+        'status': [200, 200],
+        'page_body_text': ['short', 'short'],
+    })
+    result = analyze_duplicate_content(df)
+    assert result['duplicate_urls'] == []
+    assert result['duplicate_pct'] == 0.0
+
+
+def test_mixed_content_https_page_with_http_image():
+    """An HTTPS page embedding an HTTP image should be flagged as mixed content."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/page', 'https://example.com/clean'],
+        'status': [200, 200],
+        'img_src': ['http://cdn.example.com/img.jpg', 'https://cdn.example.com/img.jpg'],
+        'links_url': ['', ''],
+    })
+    result = analyze_mixed_content(df)
+    assert result['mixed_content_count'] == 1
+    assert result['mixed_content_pages'][0]['url'] == 'https://example.com/page'
+    assert 'http://cdn.example.com/img.jpg' in result['mixed_content_pages'][0]['http_resources']
+
+
+def test_mixed_content_http_page_ignored():
+    """HTTP pages should not be checked for mixed content."""
+    df = pd.DataFrame({
+        'url': ['http://example.com/page'],
+        'status': [200],
+        'img_src': ['http://cdn.example.com/img.jpg'],
+        'links_url': [''],
+    })
+    result = analyze_mixed_content(df)
+    assert result['mixed_content_count'] == 0
+
+
+def test_anchor_text_generic_detection():
+    """Internal links with generic anchor text should be detected."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/page'],
+        'status': [200],
+        'links_url': ['https://example.com/other@@https://example.com/about'],
+        'links_text': ['click here@@About Us'],
+        'links_nofollow': ['False@@False'],
+    })
+    result = analyze_anchor_text(df, 'https://example.com')
+    assert result['total_internal_links'] == 2
+    assert result['generic_pct'] == pytest.approx(50.0, rel=0.01)
+    assert any(a['anchor'] == 'click here' for a in result['generic_anchor_links'])
+
+
+def test_anchor_text_nofollow_internal():
+    """Internal links with nofollow should be detected."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/page'],
+        'status': [200],
+        'links_url': ['https://example.com/other'],
+        'links_text': ['Read article'],
+        'links_nofollow': ['True'],
+    })
+    result = analyze_anchor_text(df, 'https://example.com')
+    assert len(result['nofollow_internal_links']) == 1
+    assert result['nofollow_internal_pct'] == pytest.approx(100.0, rel=0.01)
+
+
+def test_response_headers_no_compression():
+    """HTML pages without Content-Encoding should be flagged as lacking compression."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/', 'https://example.com/page'],
+        'status': [200, 200],
+        'resp_headers_Content-Type': ['text/html; charset=utf-8', 'text/html'],
+        'resp_headers_Content-Encoding': ['gzip', ''],
+        'resp_headers_Cache-Control': ['max-age=3600', 'max-age=3600'],
+    })
+    result = analyze_response_headers(df)
+    assert 'https://example.com/page' in result['no_compression_urls']
+    assert 'https://example.com/' not in result['no_compression_urls']
+    assert result['no_compression_pct'] == pytest.approx(50.0, rel=0.01)
+
+
+def test_url_quality_underscores():
+    """URLs with underscores in the path should be flagged."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/my_page', 'https://example.com/my-page'],
+        'status': [200, 200],
+    })
+    result = analyze_url_quality(df)
+    assert 'https://example.com/my_page' in result['urls_with_underscores']
+    assert 'https://example.com/my-page' not in result['urls_with_underscores']
+
+
+def test_url_quality_deep_urls():
+    """URLs deeper than 4 levels should be flagged."""
+    df = pd.DataFrame({
+        'url': ['https://example.com/a/b/c/d/e', 'https://example.com/a/b'],
+        'status': [200, 200],
+    })
+    result = analyze_url_quality(df)
+    assert 'https://example.com/a/b/c/d/e' in result['deep_urls']
+    assert 'https://example.com/a/b' not in result['deep_urls']
+
+
+def test_hreflang_multilingual_without_hreflang():
+    """A site with language-code URLs but no hreflang should set missing_hreflang=True."""
+    df = pd.DataFrame({
+        'url': [f'https://example.com/en/page{i}' for i in range(10)]
+             + [f'https://example.com/es/page{i}' for i in range(10)],
+        'status': [200] * 20,
+    })
+    result = analyze_hreflang(df)
+    assert result['appears_multilingual'] is True
+    assert result['has_hreflang'] is False
+    assert result['missing_hreflang'] is True
+
+
+def test_hreflang_monolingual_no_hreflang():
+    """A monolingual site without hreflang should NOT set missing_hreflang=True."""
+    df = pd.DataFrame({
+        'url': [f'https://example.com/page{i}' for i in range(10)],
+        'status': [200] * 10,
+    })
+    result = analyze_hreflang(df)
+    assert result['appears_multilingual'] is False
+    assert result['missing_hreflang'] is False

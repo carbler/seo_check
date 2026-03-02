@@ -1,12 +1,14 @@
+import asyncio
+import json
+import logging
 import pandas as pd
 import numpy as np
-import logging
 from urllib.parse import urlparse, urljoin
+
 from .config import SEOConfig
 from .utils import to_list
-import json
 
-# Import new checks
+# Existing checks
 from .checks.http import analyze_http_status
 from .checks.meta import analyze_h1_tags, analyze_titles, analyze_meta_desc, analyze_canonical
 from .checks.content import analyze_images, analyze_content_quality
@@ -16,6 +18,17 @@ from .checks.links import analyze_links
 from .checks.social import analyze_social_tags
 from .checks.schema import analyze_schema_presence
 from .checks.structure import analyze_url_structure
+
+# New checks
+from .checks.indexability import analyze_indexability
+from .checks.robots import analyze_robots_txt
+from .checks.headers import analyze_response_headers
+from .checks.duplicates import analyze_duplicate_content
+from .checks.images_broken import analyze_broken_images
+from .checks.anchors import analyze_anchor_text
+from .checks.mixed_content import analyze_mixed_content
+from .checks.url_quality import analyze_url_quality
+from .checks.hreflang import analyze_hreflang
 
 class SEOAnalyzer:
     """Analyzes the crawled data to identify SEO issues."""
@@ -46,6 +59,7 @@ class SEOAnalyzer:
 
         # Execute Checks
         try:
+            # --- Existing checks ---
             metrics['http'] = analyze_http_status(df)
             metrics['h1'] = analyze_h1_tags(df_valid)
             metrics['title'] = analyze_titles(df_valid, self.config)
@@ -59,6 +73,31 @@ class SEOAnalyzer:
             metrics['schema'] = analyze_schema_presence(df_valid)
             metrics['structure'] = analyze_url_structure(df)
             metrics['content'] = analyze_content_quality(df_valid, self.config)
+
+            # --- New checks (technical — full df) ---
+            metrics['indexability'] = analyze_indexability(df)
+            metrics['robots'] = analyze_robots_txt(df, self.config.base_url, self.config.user_agent)
+            metrics['headers'] = analyze_response_headers(df)
+            metrics['hreflang'] = analyze_hreflang(df)
+
+            # --- New checks (semantic — df_valid only) ---
+            metrics['duplicates'] = analyze_duplicate_content(df_valid)
+            metrics['anchors'] = analyze_anchor_text(df_valid, self.config.base_url)
+            metrics['mixed_content'] = analyze_mixed_content(df_valid)
+            metrics['url_quality'] = analyze_url_quality(df_valid)
+
+            # --- Async checks ---
+            try:
+                loop = asyncio.get_running_loop()
+                # Already inside an event loop (e.g. FastAPI) — run in thread pool
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, analyze_broken_images(df_valid))
+                    metrics['broken_images'] = future.result()
+            except RuntimeError:
+                # No running loop — safe to call asyncio.run directly
+                metrics['broken_images'] = asyncio.run(analyze_broken_images(df_valid))
+
         except Exception as e:
             logging.error(f"Error during analysis checks: {e}")
             # Continue with whatever metrics we gathered or empty ones
@@ -103,6 +142,18 @@ class SEOAnalyzer:
             'schema': {'present_count': 0, 'total': 0},
             'structure': {'avg_depth': 0, 'max_depth': 0, 'depth_dist': {}},
             'content': {'low_word_count': [], 'low_text_ratio': []},
+            # New checks
+            'indexability': {'noindex_pages': [], 'nofollow_pages': [], 'x_robots_noindex': [], 'noindex_pct': 0},
+            'robots': {'robots_txt_url': '', 'robots_fetched': False, 'disallowed_urls': [], 'disallowed_count': 0},
+            'headers': {'no_compression_urls': [], 'no_compression_pct': 0, 'bad_cache_urls': [], 'bad_cache_pct': 0},
+            'duplicates': {'duplicate_groups': {}, 'duplicate_urls': [], 'duplicate_pct': 0},
+            'anchors': {'generic_anchor_links': [], 'generic_pct': 0, 'total_internal_links': 0,
+                        'nofollow_internal_links': [], 'nofollow_internal_pct': 0},
+            'broken_images': {'broken_images': [], 'broken_count': 0, 'total_images': 0, 'broken_pct': 0},
+            'mixed_content': {'mixed_content_pages': [], 'mixed_content_count': 0, 'mixed_content_pct': 0},
+            'url_quality': {'urls_with_underscores': [], 'urls_with_uppercase': [], 'urls_with_params': [],
+                            'urls_with_special_chars': [], 'deep_urls': [], 'any_issue_pct': 0},
+            'hreflang': {'appears_multilingual': False, 'has_hreflang': False, 'hreflang_count': 0, 'missing_hreflang': False},
             'issues': {'errors': [], 'warnings': [], 'notices': []},
             'page_details': {},
             'integrations': {'gsc': {}, 'lighthouse': {}}
@@ -143,9 +194,38 @@ class SEOAnalyzer:
         add_issue(errors, 'Server Errors (5xx)', metrics['http']['server_errors'])
         add_issue(errors, 'Duplicate Titles', metrics['title']['duplicates'])
         add_issue(errors, 'Non-HTTPS Pages', metrics['security']['non_https'])
-        
+
         if not metrics['security'].get('ssl_valid', True):
             add_issue(errors, 'Invalid SSL Certificate', [metrics['security'].get('ssl_error', 'Verification failed')], priority_boost=True)
+
+        # New: Indexability errors
+        if metrics.get('indexability', {}).get('noindex_pages'):
+            add_issue(errors, 'Noindex Pages', metrics['indexability']['noindex_pages'], priority_boost=True)
+        if metrics.get('indexability', {}).get('x_robots_noindex'):
+            add_issue(errors, 'X-Robots-Tag Noindex', metrics['indexability']['x_robots_noindex'])
+
+        # New: Robots.txt disallowed URLs
+        if metrics.get('robots', {}).get('disallowed_urls'):
+            add_issue(errors, 'Robots.txt Disallowed URLs', metrics['robots']['disallowed_urls'])
+
+        # New: Duplicate content — group format so the UI shows which pages share content
+        dup_groups = metrics.get('duplicates', {}).get('duplicate_groups', {})
+        if dup_groups:
+            dup_pct = metrics.get('duplicates', {}).get('duplicate_pct', 0)
+            group_dict = {
+                f"Group {i + 1} — {len(urls)} pages with identical content": urls
+                for i, (_, urls) in enumerate(dup_groups.items())
+            }
+            if dup_pct > self.config.duplicate_content_threshold:
+                add_issue(errors, 'Duplicate Content', group_dict)
+
+        # New: Mixed content
+        if metrics.get('mixed_content', {}).get('mixed_content_pages'):
+            mixed_details = [
+                {'url': p['url'], 'note': f"{len(p['http_resources'])} HTTP resource(s): {p['http_resources'][0]}{'…' if len(p['http_resources']) > 1 else ''}"}
+                for p in metrics['mixed_content']['mixed_content_pages']
+            ]
+            add_issue(errors, 'Mixed Content (HTTP on HTTPS)', mixed_details)
 
         # Warnings (Important)
         add_issue(warnings, 'Missing H1 Tags', metrics['h1']['no_h1'])
@@ -159,6 +239,48 @@ class SEOAnalyzer:
         add_issue(warnings, 'Huge Page Size', metrics['performance']['huge_pages'])
         add_issue(warnings, 'Low Word Count', metrics['content']['low_word_count'])
 
+        # New warnings
+        if metrics.get('indexability', {}).get('nofollow_pages'):
+            add_issue(warnings, 'Nofollow Pages (meta)', metrics['indexability']['nofollow_pages'])
+
+        if dup_groups and metrics.get('duplicates', {}).get('duplicate_pct', 0) <= self.config.duplicate_content_threshold:
+            group_dict = {
+                f"Group {i + 1} — {len(urls)} pages with identical content": urls
+                for i, (_, urls) in enumerate(dup_groups.items())
+            }
+            add_issue(warnings, 'Duplicate Content', group_dict)
+
+        if metrics.get('broken_images', {}).get('broken_images'):
+            broken_details = [
+                {'url': b.get('img_src', ''), 'status': b.get('status', 0)}
+                for b in metrics['broken_images']['broken_images']
+            ]
+            add_issue(warnings, 'Broken Images', broken_details)
+
+        if metrics.get('headers', {}).get('no_compression_pct', 0) > self.config.compression_threshold:
+            add_issue(warnings, 'Missing HTTP Compression', metrics['headers']['no_compression_urls'])
+
+        if metrics.get('headers', {}).get('bad_cache_pct', 0) > self.config.cache_threshold:
+            add_issue(warnings, 'Poor Cache-Control Headers', metrics['headers']['bad_cache_urls'])
+
+        if metrics.get('anchors', {}).get('nofollow_internal_links'):
+            nofollow_details = [
+                {'url': a['page_url'], 'note': f"nofollow → {a['link_url']}"}
+                for a in metrics['anchors']['nofollow_internal_links']
+            ]
+            add_issue(warnings, 'Nofollow on Internal Links', nofollow_details)
+
+        if metrics.get('hreflang', {}).get('missing_hreflang'):
+            add_issue(warnings, 'Missing Hreflang (Multilingual Site)', ['Site appears multilingual but has no hreflang annotations'])
+
+        # New: Generic anchors (warning if > threshold)
+        if metrics.get('anchors', {}).get('generic_pct', 0) > self.config.generic_anchor_threshold:
+            generic_details = [
+                {'url': a['page_url'], 'note': f"anchor \"{a['anchor']}\" → {a['link_url']}"}
+                for a in metrics['anchors']['generic_anchor_links']
+            ]
+            add_issue(warnings, 'Generic Anchor Text on Internal Links', generic_details)
+
         # Notices (Info/Optimization)
         add_issue(notices, 'Redirects (3xx)', metrics['http']['redirects'])
         add_issue(notices, 'Titles Too Short', metrics['title']['short'])
@@ -166,13 +288,39 @@ class SEOAnalyzer:
         add_issue(notices, 'Meta Desc Too Long', metrics['meta']['long'])
         add_issue(notices, 'Missing Canonical', metrics['canonical']['no_canonical'])
         add_issue(notices, 'Low Text-HTML Ratio', metrics['content']['low_text_ratio'])
-        
+
         # New Notices for Social/Schema
         if metrics['schema']['missing_urls']:
             add_issue(notices, 'Missing JSON-LD Schema', metrics['schema']['missing_urls'])
-            
+
         if metrics['social']['missing_urls']:
             add_issue(notices, 'Missing Open Graph Tags', metrics['social']['missing_urls'])
+
+        # New URL quality notices (surface each sub-category if present)
+        uq = metrics.get('url_quality', {})
+        if uq.get('urls_with_underscores'):
+            add_issue(notices, 'URLs with Underscores', uq['urls_with_underscores'])
+        if uq.get('urls_with_uppercase'):
+            add_issue(notices, 'URLs with Uppercase Letters', uq['urls_with_uppercase'])
+        if uq.get('urls_with_params'):
+            add_issue(notices, 'URLs with Excessive Query Parameters', uq['urls_with_params'])
+        if uq.get('urls_with_special_chars'):
+            add_issue(notices, 'URLs with Encoded Special Characters', uq['urls_with_special_chars'])
+        if uq.get('deep_urls'):
+            add_issue(notices, 'Deep URL Structure (>4 levels)', uq['deep_urls'])
+
+        # Generic anchors notice (if below warning threshold but still present)
+        if 0 < metrics.get('anchors', {}).get('generic_pct', 0) <= self.config.generic_anchor_threshold:
+            generic_details = [
+                {'url': a['page_url'], 'note': f"anchor \"{a['anchor']}\" → {a['link_url']}"}
+                for a in metrics['anchors']['generic_anchor_links']
+            ]
+            add_issue(notices, 'Generic Anchor Text on Internal Links', generic_details)
+
+        # Hreflang notice for monolingual sites
+        if not metrics.get('hreflang', {}).get('appears_multilingual') and \
+                not metrics.get('hreflang', {}).get('has_hreflang'):
+            add_issue(notices, 'No Hreflang Detected', ['Site appears monolingual — hreflang not required but confirm intentional'])
 
         return {'errors': errors, 'warnings': warnings, 'notices': notices}
 
@@ -201,9 +349,10 @@ class SEOAnalyzer:
                 for entry in items:
                     url = entry['url']
                     extra = ""
-                    if 'count' in entry: extra = f" ({entry['count']})" if 'count' in entry else ""
-                    if 'ratio' in entry: extra = f" ({entry['ratio']:.1f}%)" if 'ratio' in entry else ""
-                    if 'status' in entry: extra = f" ({entry['status']})" if 'status' in entry else ""
+                    if 'note' in entry: extra = f": {entry['note']}"
+                    elif 'count' in entry: extra = f" ({entry['count']})"
+                    elif 'ratio' in entry: extra = f" ({entry['ratio']:.1f}%)"
+                    elif 'status' in entry: extra = f" (HTTP {entry['status']})"
 
                     if url not in url_issues: url_issues[url] = []
                     url_issues[url].append(f"{name}{extra}")
@@ -327,6 +476,31 @@ class SEOAnalyzer:
             if not error_msg:
                 error_msg = row.get('resp_headers_X-Amz-Error-Code', '')
 
+            # --- New per-page fields ---
+            meta_robots_val = str(row.get('meta_robots', '') or '').lower()
+            x_robots_val = str(row.get('resp_headers_X-Robots-Tag', '') or '').lower()
+            is_noindex = 'noindex' in meta_robots_val or 'noindex' in x_robots_val
+            is_page_nofollow = 'nofollow' in meta_robots_val
+            is_x_robots_noindex = 'noindex' in x_robots_val
+            robots_disallowed = url in metrics.get('robots', {}).get('disallowed_urls', [])
+
+            has_compression = url not in metrics.get('headers', {}).get('no_compression_urls', [])
+            has_cache_control = url not in metrics.get('headers', {}).get('bad_cache_urls', [])
+
+            dup_urls = metrics.get('duplicates', {}).get('duplicate_urls', [])
+            dup_groups = metrics.get('duplicates', {}).get('duplicate_groups', {})
+            has_duplicate_content = url in dup_urls
+            duplicate_hash = next((h for h, urls in dup_groups.items() if url in urls), None)
+            # URLs that share the same content as this page (excluding self)
+            duplicate_with = [u for u in dup_groups.get(duplicate_hash, []) if u != url] if duplicate_hash else []
+
+            broken_img_srcs = {b.get('img_src', '') for b in metrics.get('broken_images', {}).get('broken_images', [])}
+            page_img_srcs = set(to_list(row.get('img_src')))
+            broken_images_count = len(page_img_srcs & broken_img_srcs)
+
+            mixed_urls = {p['url'] for p in metrics.get('mixed_content', {}).get('mixed_content_pages', [])}
+            has_mixed_content = url in mixed_urls
+
             page_details[url] = {
                 'status': status,
                 'title': title,
@@ -354,7 +528,18 @@ class SEOAnalyzer:
                 'og_image': str(og_image) if pd.notna(og_image) else '',
                 'jsonld': jsonld,
                 'has_schema': jsonld != '',
-                'gsc': gsc_metrics
+                'gsc': gsc_metrics,
+                # New fields
+                'noindex': is_noindex,
+                'x_robots_noindex': is_x_robots_noindex,
+                'page_nofollow': is_page_nofollow,
+                'robots_disallowed': robots_disallowed,
+                'has_compression': has_compression,
+                'has_cache_control': has_cache_control,
+                'has_duplicate_content': has_duplicate_content,
+                'duplicate_with': duplicate_with,
+                'broken_images_count': broken_images_count,
+                'has_mixed_content': has_mixed_content,
             }
 
         return page_details
@@ -384,7 +569,26 @@ class SEOAnalyzer:
             "Huge Page Size": f"Page size exceeds {self.config.max_page_size_bytes / 1024 / 1024:.1f} MB. Heavy pages hurt mobile performance.",
             "Missing JSON-LD Schema": "No structured data found. Rich snippets in search results may not be available.",
             "Missing Open Graph Tags": "Open Graph tags are missing. Social media shares may not display correctly.",
-            "Invalid SSL Certificate": "The website's SSL certificate is expired, invalid, or untrusted. This is a major security risk and hurts SEO rankings."
+            "Invalid SSL Certificate": "The website's SSL certificate is expired, invalid, or untrusted. This is a major security risk and hurts SEO rankings.",
+            # New issue definitions
+            "Noindex Pages": "Pages with 'noindex' directive in meta_robots. Google will not index these pages. Verify they are intentionally excluded.",
+            "X-Robots-Tag Noindex": "Pages with 'noindex' in the X-Robots-Tag HTTP header. Google will not index these pages.",
+            "Nofollow Pages (meta)": "Pages with 'nofollow' in meta_robots. Google will not follow links from these pages, wasting internal PageRank.",
+            "Robots.txt Disallowed URLs": "Crawled URLs that are blocked by robots.txt. Googlebot cannot access these pages; verify the disallow rules are intentional.",
+            "Duplicate Content": "Pages sharing identical body text content. Duplicate content dilutes ranking authority and confuses Google about which URL to rank.",
+            "Mixed Content (HTTP on HTTPS)": "HTTPS pages loading resources (images, links) over HTTP. Chrome blocks mixed content, causing page errors and security warnings.",
+            "Broken Images": "Image URLs returning 4xx/5xx status codes. Broken images damage UX and signal poor site maintenance to crawlers.",
+            "Missing HTTP Compression": f"HTML pages served without gzip or Brotli compression (>{self.config.compression_threshold}% of pages). Compression significantly reduces page size and improves Core Web Vitals.",
+            "Poor Cache-Control Headers": f"Pages missing or using restrictive Cache-Control headers (>{self.config.cache_threshold}% of pages). Proper caching reduces load times for repeat visitors.",
+            "Nofollow on Internal Links": "Internal links with rel='nofollow' waste PageRank by preventing flow between your own pages.",
+            "Missing Hreflang (Multilingual Site)": "The site appears to target multiple languages based on URL patterns, but no hreflang annotations were found. This causes Google to serve the wrong language to users.",
+            "Generic Anchor Text on Internal Links": "Internal links using generic anchors like 'click here', 'read more', etc. Descriptive anchor text passes more semantic signal to search engines.",
+            "URLs with Underscores": "URLs containing underscores in the path. Google treats underscores as word joiners, not separators. Use hyphens instead.",
+            "URLs with Uppercase Letters": "URLs with uppercase letters in the path. This can cause duplicate content issues if the same page is accessible via both cases.",
+            "URLs with Excessive Query Parameters": "URLs with more than 2 query parameters. Complex parameter URLs can confuse crawlers and dilute link equity.",
+            "URLs with Encoded Special Characters": "URLs containing percent-encoded special characters in the path (e.g. %20, %3A). Clean, readable URLs are preferred.",
+            "Deep URL Structure (>4 levels)": "URLs with more than 4 path levels. Deep URLs signal lower importance to search engines and receive less PageRank.",
+            "No Hreflang Detected": "No hreflang annotations found. For monolingual sites this is expected, but confirm there are no international versions.",
         }
 
 
@@ -480,6 +684,113 @@ class SEOScorer:
             penalty = max(penalty, 2.0) # Min penalty if any huge
             score -= penalty
             penalties_log.append(f"Huge Pages (> 2MB): -{penalty:.1f}")
+
+        # 8. Indexability
+        noindex_pct = metrics.get('indexability', {}).get('noindex_pct', 0)
+        if noindex_pct > self.config.noindex_threshold:
+            penalty = self.config.penalty_noindex_page
+            score -= penalty
+            penalties_log.append(f"Noindex Pages (>{self.config.noindex_threshold}%): -{penalty}")
+        elif noindex_pct > 0:
+            penalty = (noindex_pct / self.config.noindex_threshold) * self.config.penalty_noindex_page
+            score -= penalty
+            penalties_log.append(f"Noindex Pages ({noindex_pct:.1f}%): -{penalty:.1f}")
+
+        nofollow_pages = metrics.get('indexability', {}).get('nofollow_pages', [])
+        if nofollow_pages:
+            total_pages = http_metrics['total'] or 1
+            nofollow_pct = len(nofollow_pages) / total_pages * 100
+            penalty = min((nofollow_pct / 100.0) * self.config.penalty_page_nofollow, self.config.penalty_page_nofollow)
+            score -= penalty
+            penalties_log.append(f"Nofollow Pages ({nofollow_pct:.1f}%): -{penalty:.1f}")
+
+        # 9. Robots.txt disallowed URLs
+        disallowed_count = metrics.get('robots', {}).get('disallowed_count', 0)
+        if disallowed_count > 0:
+            total_pages = http_metrics['total'] or 1
+            disallowed_pct = disallowed_count / total_pages * 100
+            if disallowed_pct > self.config.critical_threshold:
+                penalty = self.config.penalty_robots_disallow
+            else:
+                penalty = max(5.0, (disallowed_pct / self.config.critical_threshold) * self.config.penalty_robots_disallow)
+            score -= penalty
+            penalties_log.append(f"Robots.txt Disallowed ({disallowed_count} URLs): -{penalty:.1f}")
+
+        # 10. Response Headers
+        no_compression_pct = metrics.get('headers', {}).get('no_compression_pct', 0)
+        if no_compression_pct > self.config.compression_threshold:
+            penalty = self.config.penalty_no_compression
+            score -= penalty
+            penalties_log.append(f"No HTTP Compression (>{self.config.compression_threshold}%): -{penalty}")
+        elif no_compression_pct > 0:
+            penalty = (no_compression_pct / self.config.compression_threshold) * self.config.penalty_no_compression
+            score -= penalty
+            penalties_log.append(f"No HTTP Compression ({no_compression_pct:.1f}%): -{penalty:.1f}")
+
+        bad_cache_pct = metrics.get('headers', {}).get('bad_cache_pct', 0)
+        if bad_cache_pct > self.config.cache_threshold:
+            penalty = self.config.penalty_bad_cache
+            score -= penalty
+            penalties_log.append(f"Poor Cache-Control (>{self.config.cache_threshold}%): -{penalty}")
+        elif bad_cache_pct > 0:
+            penalty = (bad_cache_pct / self.config.cache_threshold) * self.config.penalty_bad_cache
+            score -= penalty
+            penalties_log.append(f"Poor Cache-Control ({bad_cache_pct:.1f}%): -{penalty:.1f}")
+
+        # 11. Duplicate Content
+        dup_pct = metrics.get('duplicates', {}).get('duplicate_pct', 0)
+        if dup_pct > self.config.duplicate_content_threshold:
+            penalty = self.config.penalty_duplicate_content
+            score -= penalty
+            penalties_log.append(f"Duplicate Content (>{self.config.duplicate_content_threshold}%): -{penalty}")
+        elif dup_pct > 0:
+            penalty = (dup_pct / self.config.duplicate_content_threshold) * self.config.penalty_duplicate_content
+            score -= penalty
+            penalties_log.append(f"Duplicate Content ({dup_pct:.1f}%): -{penalty:.1f}")
+
+        # 12. Broken Images
+        broken_img_pct = metrics.get('broken_images', {}).get('broken_pct', 0)
+        if broken_img_pct > self.config.broken_image_threshold:
+            penalty = self.config.penalty_broken_image
+            score -= penalty
+            penalties_log.append(f"Broken Images (>{self.config.broken_image_threshold}%): -{penalty}")
+        elif broken_img_pct > 0:
+            penalty = (broken_img_pct / self.config.broken_image_threshold) * self.config.penalty_broken_image
+            score -= penalty
+            penalties_log.append(f"Broken Images ({broken_img_pct:.1f}%): -{penalty:.1f}")
+
+        # 13. Mixed Content
+        mixed_content_count = metrics.get('mixed_content', {}).get('mixed_content_count', 0)
+        if mixed_content_count > 0:
+            total_pages = http_metrics['total'] or 1
+            mixed_pct = mixed_content_count / total_pages * 100
+            penalty = min((mixed_pct / 100.0) * self.config.penalty_mixed_content, self.config.penalty_mixed_content)
+            penalty = max(penalty, 2.0)
+            score -= penalty
+            penalties_log.append(f"Mixed Content ({mixed_content_count} pages): -{penalty:.1f}")
+
+        # 14. URL Quality (only if > threshold % of pages affected)
+        url_quality_pct = metrics.get('url_quality', {}).get('any_issue_pct', 0)
+        if url_quality_pct > self.config.url_quality_threshold:
+            penalty = self.config.penalty_url_quality
+            score -= penalty
+            penalties_log.append(f"URL Quality Issues (>{self.config.url_quality_threshold}%): -{penalty}")
+
+        # 15. Anchor text — generic anchors
+        generic_anchor_pct = metrics.get('anchors', {}).get('generic_pct', 0)
+        if generic_anchor_pct > self.config.generic_anchor_threshold:
+            penalty = self.config.penalty_generic_anchors
+            score -= penalty
+            penalties_log.append(f"Generic Anchor Text (>{self.config.generic_anchor_threshold}%): -{penalty}")
+
+        # 16. Nofollow on internal links
+        nofollow_internal_pct = metrics.get('anchors', {}).get('nofollow_internal_pct', 0)
+        if nofollow_internal_pct > 0:
+            total_internal = metrics.get('anchors', {}).get('total_internal_links', 1) or 1
+            nofollow_count = len(metrics.get('anchors', {}).get('nofollow_internal_links', []))
+            penalty = min((nofollow_internal_pct / 100.0) * self.config.penalty_nofollow_internal, self.config.penalty_nofollow_internal)
+            score -= penalty
+            penalties_log.append(f"Nofollow Internal Links ({nofollow_count}): -{penalty:.1f}")
 
         score = max(0.0, score)
 

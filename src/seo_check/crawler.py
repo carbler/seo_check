@@ -64,9 +64,10 @@ class SEOCrawler:
         print(f"   • Max depth: {self.config.max_depth}")
         print("   • No page limit")
 
-        # Add body text extraction to enable content analysis
+        # Extract visible body text, explicitly excluding <script> and <style> tags
+        # so that inline JavaScript code is not included in the text fingerprint.
         selectors = {
-            'page_body_text': 'body ::text',
+            'page_body_text': 'body :not(script):not(style) ::text',
         }
 
         custom_settings = {

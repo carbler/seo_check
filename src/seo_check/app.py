@@ -304,6 +304,14 @@ async def view_issue_detail(request: Request, report_id: str, issue_name: str):
             target_issue = issue
             break
 
+    # Page-detail links append extra info to the name (e.g. "Low Text-HTML Ratio (9.0%)")
+    # so fall back to a startswith match when exact lookup fails.
+    if not target_issue:
+        for issue in all_issues:
+            if issue_name.startswith(issue['name']):
+                target_issue = issue
+                break
+
     if not target_issue:
         raise HTTPException(status_code=404, detail="Issue not found")
 

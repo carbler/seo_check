@@ -441,6 +441,7 @@
                 search: '',
                 filterStatus: 'all',
                 logs: [],
+                _logCounter: 0,
                 ws: null,
 
                 init() {
@@ -452,26 +453,40 @@
                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     let hostname = window.location.hostname;
                     let port = window.location.port ? `:${window.location.port}` : '';
-                    if (hostname === '0.0.0.0') hostname = '127.0.0.1';
-                    
+                    if (hostname === '0.0.0.0') {
+                        hostname = '127.0.0.1';
+                        console.log("Detected 0.0.0.0, switching WebSocket to 127.0.0.1");
+                    }
                     const wsUrl = `${protocol}//${hostname}${port}/ws/${this.reportId}`;
+                    console.log("Connecting to WebSocket:", wsUrl);
                     this.ws = new WebSocket(wsUrl);
 
+                    this.ws.onopen = () => { console.log("WebSocket Connected"); };
+                    this.ws.onerror = (e) => {
+                        console.error("WebSocket Error:", e);
+                        this.addLog("WebSocket connection error.");
+                    };
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         if (data.type === 'log') {
                             this.addLog(data.message);
                         } else if (data.type === 'crawl_event') {
-                            this.addLog(`Visiting: ${data.url} (${data.status})`);
+                            this.addLog(`Crawled: ${data.url} (${data.status})`);
                         } else if (data.type === 'complete') {
-                            this.addLog("✨ Analysis Finalized!");
+                            this.addLog("Analysis Finished!");
                             this.pollStatus();
+                        } else if (data.type === 'error') {
+                            this.addLog(`Error: ${data.message}`);
                         }
                     };
                 },
 
                 addLog(message) {
-                    this.logs.unshift({ id: Date.now(), time: new Date().toLocaleTimeString(), message: message });
+                    this.logs.unshift({
+                        id: ++this._logCounter,
+                        time: new Date().toLocaleTimeString(),
+                        message: message
+                    });
                     if (this.logs.length > 100) this.logs.pop();
                 },
 
@@ -489,6 +504,7 @@
                             setTimeout(() => this.pollStatus(), 2000);
                         }
                     } catch (e) {
+                        console.error(e);
                         if (!this.report) this.error = true;
                     }
                 },
@@ -497,11 +513,13 @@
                     try {
                         this.loading = true;
                         const response = await fetch(`/api/reports/${this.reportId}`);
+                        if (!response.ok) throw new Error('Failed to fetch report');
                         this.report = await response.json();
                         this.calculateCounts();
                         this.loading = false;
                         if (this.ws) this.ws.close();
                     } catch (e) {
+                        console.error(e);
                         this.error = true;
                         this.loading = false;
                     }
@@ -518,146 +536,6 @@
                     if (!this.report?.metrics?.page_details) return {};
                     return Object.fromEntries(
                         Object.entries(this.report.metrics.page_details).filter(([url, data]) => {
-                            const matchesSearch = url.toLowerCase().includes(this.search.toLowerCase());
-                            const matchesFilter = this.filterStatus === 'all' || data.status.includes(this.filterStatus);
-                            return matchesSearch && matchesFilter;
-                        })
-                    );
-                }
-            }
-        }
-    </script>
-</body>
-</html>
-
-    <script>
-        function seoViewer(reportId) {
-            return {
-                reportId: reportId,
-                report: null,
-                status: null,
-                loading: true,
-                error: false,
-                tab: 'issues',
-                counts: { errors: 0, warnings: 0 },
-                search: '',
-                filterStatus: 'all',
-                logs: [],
-                ws: null,
-
-                init() {
-                    this.pollStatus();
-                    this.connectWebSocket();
-                },
-
-                connectWebSocket() {
-                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
-                    // Logic to ensure we don't connect to 0.0.0.0 which browsers block
-                    let hostname = window.location.hostname;
-                    let port = window.location.port ? `:${window.location.port}` : '';
-
-                    if (hostname === '0.0.0.0') {
-                        hostname = '127.0.0.1';
-                        console.log("Detected 0.0.0.0, switching WebSocket to 127.0.0.1");
-                    }
-
-                    const wsUrl = `${protocol}//${hostname}${port}/ws/${this.reportId}`;
-                    console.log("Connecting to WebSocket:", wsUrl);
-
-                    this.ws = new WebSocket(wsUrl);
-
-                    this.ws.onopen = () => {
-                        console.log("WebSocket Connected");
-                    };
-
-                    this.ws.onerror = (e) => {
-                        console.error("WebSocket Error:", e);
-                        this.addLog("WebSocket connection error. Try accessing via 127.0.0.1 instead of 0.0.0.0");
-                    };
-
-                    this.ws.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-
-                        if (data.type === 'log') {
-                            this.addLog(data.message);
-                        } else if (data.type === 'crawl_event') {
-                            this.addLog(`Crawled: ${data.url} (${data.status})`);
-                        } else if (data.type === 'complete') {
-                            this.addLog("Analysis Finished!");
-                            this.pollStatus(); // Force status update to trigger completed view
-                        } else if (data.type === 'error') {
-                            this.addLog(`Error: ${data.message}`);
-                        }
-                    };
-                },
-
-                addLog(message) {
-                    this.logs.unshift({
-                        id: Date.now(),
-                        time: new Date().toLocaleTimeString(),
-                        message: message
-                    });
-                    // Keep logs limited
-                    if (this.logs.length > 50) this.logs.pop();
-                },
-
-                async pollStatus() {
-                    try {
-                        const response = await fetch(`/api/status/${this.reportId}`);
-                        if (!response.ok) throw new Error('Status check failed');
-
-                        this.status = await response.json();
-
-                        if (this.status.stage === 'completed') {
-                            await this.loadReport();
-                        } else if (this.status.stage === 'failed') {
-                            this.loading = false;
-                        } else {
-                            // Continue polling
-                            this.loading = false; // Show progress UI instead of generic loading
-                            setTimeout(() => this.pollStatus(), 2000);
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        // Only set error if we haven't loaded report yet and it's a hard fail
-                        if (!this.report) this.error = true;
-                    }
-                },
-
-                async loadReport() {
-                    try {
-                        this.loading = true;
-                        const response = await fetch(`/api/reports/${this.reportId}`);
-                        if (!response.ok) throw new Error('Failed to fetch report');
-                        this.report = await response.json();
-                        this.calculateCounts();
-                        this.loading = false;
-                        if (this.ws) this.ws.close(); // Close socket when done
-                    } catch (e) {
-                        console.error(e);
-                        this.error = true;
-                        this.loading = false;
-                    }
-                },
-
-                calculateCounts() {
-                    if (!this.report || !this.report.metrics || !this.report.metrics.issues) return;
-
-                    const issues = this.report.metrics.issues;
-                    if (issues.errors) {
-                        this.counts.errors = issues.errors.reduce((acc, i) => acc + i.count, 0);
-                    }
-                    if (issues.warnings) {
-                        this.counts.warnings = issues.warnings.reduce((acc, i) => acc + i.count, 0);
-                    }
-                },
-
-                get filteredPages() {
-                    if (!this.report || !this.report.metrics || !this.report.metrics.page_details) return {};
-                    const pages = this.report.metrics.page_details;
-                    return Object.fromEntries(
-                        Object.entries(pages).filter(([url, data]) => {
                             const matchesSearch = url.toLowerCase().includes(this.search.toLowerCase());
                             const matchesFilter = this.filterStatus === 'all' || data.status.includes(this.filterStatus);
                             return matchesSearch && matchesFilter;

@@ -2,386 +2,690 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Page Analysis - SEO Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>hljs.highlightAll();</script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .progress-track { height: 6px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+        .progress-fill  { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans">
+<body class="bg-[#f8fafc] text-slate-800">
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <a href="/report/{{ report_id }}" class="text-gray-500 hover:text-gray-700 transition">
-                    <i class="fa-solid fa-arrow-left text-xl"></i>
-                </a>
-                <h1 class="text-xl font-bold text-gray-900">Page Analysis</h1>
+<!-- ── STICKY HEADER ──────────────────────────────────────────────────── -->
+<header class="bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+        <!-- Back -->
+        <a href="/report/{{ report_id }}"
+           class="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition shrink-0">
+            <i class="fa-solid fa-arrow-left"></i>
+        </a>
+
+        <!-- URL + open link -->
+        <div class="flex-1 min-w-0 flex items-center gap-2">
+            <span class="text-[11px] font-black text-slate-400 uppercase tracking-widest shrink-0 hidden sm:block">Page</span>
+            <span class="text-sm font-bold text-slate-700 truncate">{{ url }}</span>
+            <a href="{{ url }}" target="_blank" rel="noopener"
+               class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg text-[11px] font-black uppercase tracking-widest transition border border-indigo-100 hover:border-indigo-600">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span class="hidden sm:inline">Open</span>
+            </a>
+        </div>
+
+        <!-- Status badge -->
+        <span class="shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest
+            {% if 'Critical' in data.status %} bg-rose-100 text-rose-700 border border-rose-200
+            {% elif 'Warning' in data.status %} bg-amber-100 text-amber-700 border border-amber-200
+            {% elif 'Notice'  in data.status %} bg-indigo-100 text-indigo-700 border border-indigo-200
+            {% else %} bg-emerald-100 text-emerald-700 border border-emerald-200 {% endif %}">
+            {% if 'Critical' in data.status %}<i class="fa-solid fa-circle-exclamation mr-1"></i>
+            {% elif 'Warning' in data.status %}<i class="fa-solid fa-triangle-exclamation mr-1"></i>
+            {% elif 'Notice'  in data.status %}<i class="fa-solid fa-circle-info mr-1"></i>
+            {% else %}<i class="fa-solid fa-circle-check mr-1"></i>{% endif %}
+            {{ data.status }}
+        </span>
+    </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SECTION 1 — CRAWLABILITY & INDEXABILITY
+     "These gate whether Google can even find and rank this page."
+     ════════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center text-white text-sm shadow-lg shadow-violet-200">
+            <i class="fa-solid fa-robot"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-slate-900 leading-tight">Crawlability &amp; Indexability</h2>
+            <p class="text-[11px] text-slate-400 font-medium">If any of these fail, Google cannot rank this page — fix these first.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+
+        {# ── Noindex ───────────────────────────── #}
+        {% set ni_bad = data.noindex %}
+        <div class="bg-white rounded-2xl border {{ 'border-rose-200 shadow-rose-100' if ni_bad else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Indexing</span>
+                <div class="w-7 h-7 rounded-lg {{ 'bg-rose-100' if ni_bad else 'bg-emerald-100' }} flex items-center justify-center">
+                    <i class="fa-solid {{ 'fa-ban text-rose-600' if ni_bad else 'fa-check text-emerald-600' }} text-xs"></i>
+                </div>
             </div>
             <div>
-                 <span class="px-3 py-1 rounded-full text-sm font-semibold
-                    {% if 'Critical' in data.status %} bg-red-100 text-red-800
-                    {% elif 'Warning' in data.status %} bg-yellow-100 text-yellow-800
-                    {% elif 'Notice' in data.status %} bg-blue-100 text-blue-800
-                    {% else %} bg-green-100 text-green-800 {% endif %}">
-                    {{ data.status }}
-                </span>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-7xl mx-auto px-6 py-10">
-
-        <!-- Health Overview -->
-        <div class="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden mb-10">
-            <div class="px-10 py-8 border-b border-slate-50 bg-slate-50/30">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                            <i class="fa-solid fa-link text-indigo-500"></i> Page Resource
-                        </div>
-                        <h1 class="text-2xl font-black text-slate-900 break-all leading-tight">{{ url }}</h1>
-                    </div>
-                    <div class="flex items-center gap-4 shrink-0">
-                        <div class="text-right hidden sm:block">
-                            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Page Health</div>
-                            <div class="font-bold text-slate-900">{{ data.status }}</div>
-                        </div>
-                        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg
-                            {% if 'Critical' in data.status %} bg-rose-500 shadow-rose-200
-                            {% elif 'Warning' in data.status %} bg-amber-500 shadow-amber-200
-                            {% elif 'Notice' in data.status %} bg-indigo-500 shadow-indigo-200
-                            {% else %} bg-emerald-500 shadow-emerald-200 {% endif %}">
-                            <i class="fa-solid {% if 'Critical' in data.status %}fa-heart-crack{% else %}fa-heart-pulse{% endif %} text-2xl"></i>
-                        </div>
-                    </div>
+                <div class="text-base font-black {{ 'text-rose-600' if ni_bad else 'text-emerald-600' }}">
+                    {{ 'BLOCKED' if ni_bad else 'INDEXABLE' }}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {% if ni_bad %}
+                        Via {{ 'X-Robots-Tag header' if data.x_robots_noindex else 'meta robots tag' }}
+                    {% else %}
+                        Google can index this page
+                    {% endif %}
                 </div>
             </div>
-
-            <div class="p-10">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-16">
-                    
-                    <!-- Connectivity & Safety -->
-                    <div class="space-y-8">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Connectivity
-                        </h3>
-                        
-                        <!-- Status -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.status_code == 200 else 'bg-rose-500 animate-pulse' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">HTTP Status</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Response Code</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end">
-                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.status_code == 200 else 'text-rose-500' }} tracking-tight">{{ data.status_code }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Security -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.is_https and data.ssl_valid else 'bg-rose-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Security</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">SSL / Encryption</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end">
-                                <span class="text-sm font-black {{ 'text-emerald-600' if data.is_https and data.ssl_valid else 'text-rose-600' }} tracking-widest">{{ 'SECURE' if data.is_https and data.ssl_valid else ('INVALID' if data.is_https else 'UNSECURE') }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{{ 'HTTPS Cert' if data.is_https else 'HTTP Plain' }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Architecture -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.depth <= 3 else 'bg-amber-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">URL Depth</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Site Hierarchy</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.depth <= 3 else 'text-amber-500' }} tracking-tight">{{ data.depth }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Recommended <= 3</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content Metrics -->
-                    <div class="space-y-8">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Content Quality
-                        </h3>
-                        
-                        <!-- Word Count -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.words >= config.min_word_count else 'bg-amber-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Word Count</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Copy length</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.words >= config.min_word_count else 'text-amber-500' }} tracking-tight">{{ data.words }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Target > {{ config.min_word_count }}</span>
-                            </div>
-                        </div>
-
-                        <!-- H1 -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.h1_count == 1 else 'bg-rose-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">H1 Headers</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Main Topic Tag</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.h1_count == 1 else 'text-rose-500' }} tracking-tight">{{ data.h1_count }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Target exactly 1</span>
-                            </div>
-                        </div>
-
-                        <!-- Titles -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.title_len >= config.title_min_length and data.title_len <= config.title_max_length else 'bg-amber-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Title Length</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pixel Space</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-2xl font-black {{ 'text-emerald-500' if data.title_len >= config.title_min_length and data.title_len <= config.title_max_length else 'text-amber-500' }} tracking-tight">{{ data.title_len }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{{ config.title_min_length }}-{{ config.title_max_length }} chars</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Technical & Social -->
-                    <div class="space-y-8">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
-                            On-Page Technical
-                        </h3>
-                        
-                        <!-- Page Size -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.size <= config.max_page_size_bytes else 'bg-rose-500' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Page Weight</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Total Size</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-lg font-black {{ 'text-emerald-500' if data.size <= config.max_page_size_bytes else 'text-rose-500' }} tracking-tight">{{ (data.size / 1024)|round(1) }} KB</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Max 2MB</span>
-                            </div>
-                        </div>
-
-                        <!-- Schema -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.has_schema else 'bg-slate-300' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Schema Data</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">JSON-LD</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-sm font-black {{ 'text-emerald-500' if data.has_schema else 'text-slate-400' }} tracking-widest">{{ 'PRESENT' if data.has_schema else 'MISSING' }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Rich Results</span>
-                            </div>
-                        </div>
-
-                        <!-- Social -->
-                        <div class="flex items-center justify-between group">
-                            <div class="flex items-center gap-4">
-                                <div class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.og_title else 'bg-slate-300' }}"></div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">Social Tags</div>
-                                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Open Graph</div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end text-right">
-                                <span class="text-sm font-black {{ 'text-emerald-500' if data.og_title else 'text-slate-400' }} tracking-widest">{{ 'OPTIMIZED' if data.og_title else 'MISSING' }}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Twitter/FB</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {% if ni_bad %}
+            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-1">How to fix</div>
+                <p class="text-[11px] text-rose-700 leading-relaxed">
+                    {% if data.x_robots_noindex %}Remove the <code class="bg-rose-100 px-1 rounded">X-Robots-Tag: noindex</code> response header from your server config.
+                    {% else %}Remove <code class="bg-rose-100 px-1 rounded">noindex</code> from the <code class="bg-rose-100 px-1 rounded">&lt;meta name="robots"&gt;</code> tag.{% endif %}
+                </p>
             </div>
+            {% endif %}
         </div>
 
-        <!-- Issues -->
-        {% if data.issues %}
-        <div class="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden mb-10">
-            <div class="bg-rose-50/50 px-10 py-6 border-b border-rose-100 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-200">
-                        <i class="fa-solid fa-triangle-exclamation text-sm"></i>
-                    </div>
-                    <h2 class="text-xl font-black text-rose-900 tracking-tight uppercase">Critical Improvements</h2>
-                </div>
-                <span class="bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-sm" x-text="{{ data.issues|length }}"></span>
-            </div>
-            
-            <div class="p-10">
-                {% if data.status_code == 404 and data.error_msg %}
-                <div class="mb-10 p-8 bg-rose-50 rounded-3xl border border-rose-100 flex gap-6 items-start">
-                    <div class="w-14 h-14 rounded-2xl bg-white flex-shrink-0 flex items-center justify-center text-rose-600 shadow-sm">
-                        <i class="fa-solid fa-server text-xl"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-black mb-1 text-lg text-rose-900 tracking-tight uppercase">Server Response Failure</div>
-                        <div class="text-rose-700 font-medium leading-relaxed">
-                            <strong>Status:</strong> 404 Not Found<br>
-                            <strong>Message:</strong> {{ data.error_msg }}
-                            {% if data.server %}<span class="text-xs opacity-60 ml-2">({{ data.server }})</span>{% endif %}
-                        </div>
-                        <div class="mt-4 text-xs font-medium text-rose-600/70 leading-relaxed max-w-2xl italic">
-                            This is a "hard" error from your infrastructure. Search engines cannot index this content and users will see a broken page. Check your server routing or S3 bucket configuration.
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if not data.ssl_valid and data.is_https %}
-                <div class="mb-10 p-8 bg-rose-50 rounded-3xl border border-rose-100 flex gap-6 items-start animate-in zoom-in duration-500">
-                    <div class="w-14 h-14 rounded-2xl bg-white flex-shrink-0 flex items-center justify-center text-rose-600 shadow-sm">
-                        <i class="fa-solid fa-shield-halved text-xl"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-black mb-1 text-lg text-rose-900 tracking-tight uppercase">Security Certificate Violation</div>
-                        <div class="text-rose-700 font-medium leading-relaxed">
-                            <strong>SSL Status:</strong> Invalid / Verification Failed<br>
-                            <strong>Details:</strong> {{ data.ssl_error }}
-                        </div>
-                        <div class="mt-4 text-xs font-medium text-rose-600/70 leading-relaxed max-w-2xl italic">
-                            Your site uses HTTPS but the certificate could not be verified. Browsers will block access or show scary warnings to your users. This is a critical SEO penalty.
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="grid grid-cols-1 gap-4">
-                    {% for issue in data.issues %}
-                    <div class="group flex items-center gap-4 p-5 rounded-2xl border border-slate-50 hover:border-rose-100 hover:bg-rose-50/20 transition-all">
-                        <div class="w-2 h-2 rounded-full bg-rose-400 group-hover:scale-150 transition-transform"></div>
-                        <span class="text-slate-700 font-bold text-lg tracking-tight">{{ issue }}</span>
-                    </div>
-                    {% endfor %}
+        {# ── Robots.txt ───────────────────────── #}
+        {% set rb_bad = data.robots_disallowed %}
+        <div class="bg-white rounded-2xl border {{ 'border-rose-200 shadow-rose-100' if rb_bad else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Robots.txt</span>
+                <div class="w-7 h-7 rounded-lg {{ 'bg-rose-100' if rb_bad else 'bg-emerald-100' }} flex items-center justify-center">
+                    <i class="fa-solid {{ 'fa-circle-minus text-rose-600' if rb_bad else 'fa-check text-emerald-600' }} text-xs"></i>
                 </div>
             </div>
+            <div>
+                <div class="text-base font-black {{ 'text-rose-600' if rb_bad else 'text-emerald-600' }}">
+                    {{ 'DISALLOWED' if rb_bad else 'ALLOWED' }}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {{ 'Googlebot cannot crawl this URL' if rb_bad else 'Googlebot can access this page' }}
+                </div>
+            </div>
+            {% if rb_bad %}
+            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-1">How to fix</div>
+                <p class="text-[11px] text-rose-700 leading-relaxed">
+                    Open your <code class="bg-rose-100 px-1 rounded">robots.txt</code> file and remove or adjust the <code class="bg-rose-100 px-1 rounded">Disallow</code> rule that matches this URL path.
+                </p>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            <!-- Meta Data & Social Preview -->
-            <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-                 <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <h2 class="text-lg font-semibold text-gray-700">Metadata & Social Preview</h2>
+        {# ── HTTPS ────────────────────────────── #}
+        {% set ssl_bad = not data.is_https or not data.ssl_valid %}
+        <div class="bg-white rounded-2xl border {{ 'border-rose-200 shadow-rose-100' if ssl_bad else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Security</span>
+                <div class="w-7 h-7 rounded-lg {{ 'bg-rose-100' if ssl_bad else 'bg-emerald-100' }} flex items-center justify-center">
+                    <i class="fa-solid {{ 'fa-shield-xmark text-rose-600' if ssl_bad else 'fa-shield-halved text-emerald-600' }} text-xs"></i>
                 </div>
-                <div class="p-6 space-y-6">
+            </div>
+            <div>
+                <div class="text-base font-black {{ 'text-rose-600' if ssl_bad else 'text-emerald-600' }}">
+                    {% if not data.is_https %}HTTP (UNSECURE)
+                    {% elif not data.ssl_valid %}CERT INVALID
+                    {% else %}HTTPS SECURE{% endif %}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {{ 'SSL/TLS encryption' if data.is_https else 'Plain HTTP — no encryption' }}
+                </div>
+            </div>
+            {% if ssl_bad %}
+            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-1">How to fix</div>
+                <p class="text-[11px] text-rose-700 leading-relaxed">
+                    {% if not data.is_https %}Install an SSL certificate (Let's Encrypt is free) and set up 301 redirects from HTTP to HTTPS.
+                    {% else %}Renew or replace your SSL certificate. Check the server error log for the exact validation error.{% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
 
-                    <!-- Standard Meta -->
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-900 mb-1">Title Tag</h3>
-                        <div class="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm text-gray-700 break-words">
-                            {{ data.title if data.title else '<span class="text-red-400 italic">Missing</span>'|safe }}
-                        </div>
+        {# ── Mixed Content ─────────────────────── #}
+        {% set mc_bad = data.has_mixed_content %}
+        <div class="bg-white rounded-2xl border {{ 'border-rose-200 shadow-rose-100' if mc_bad else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mixed Content</span>
+                <div class="w-7 h-7 rounded-lg {{ 'bg-rose-100' if mc_bad else 'bg-emerald-100' }} flex items-center justify-center">
+                    <i class="fa-solid {{ 'fa-triangle-exclamation text-rose-600' if mc_bad else 'fa-check text-emerald-600' }} text-xs"></i>
+                </div>
+            </div>
+            <div>
+                <div class="text-base font-black {{ 'text-rose-600' if mc_bad else 'text-emerald-600' }}">
+                    {{ 'DETECTED' if mc_bad else 'CLEAN' }}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {{ 'HTTP resources on HTTPS page — Chrome blocks these' if mc_bad else 'All resources use HTTPS' }}
+                </div>
+            </div>
+            {% if mc_bad %}
+            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-1">How to fix</div>
+                <p class="text-[11px] text-rose-700 leading-relaxed">
+                    Update all embedded <code class="bg-rose-100 px-1 rounded">src</code> and <code class="bg-rose-100 px-1 rounded">href</code> attributes to use <code class="bg-rose-100 px-1 rounded">https://</code> URLs. Use a Content Security Policy to catch future issues.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── Link Crawling ─────────────────────── #}
+        {% set lc_bad = data.page_nofollow %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200 shadow-amber-50' if lc_bad else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Link Crawling</span>
+                <div class="w-7 h-7 rounded-lg {{ 'bg-amber-100' if lc_bad else 'bg-emerald-100' }} flex items-center justify-center">
+                    <i class="fa-solid {{ 'fa-link-slash text-amber-600' if lc_bad else 'fa-check text-emerald-600' }} text-xs"></i>
+                </div>
+            </div>
+            <div>
+                <div class="text-base font-black {{ 'text-amber-600' if lc_bad else 'text-emerald-600' }}">
+                    {{ 'NOFOLLOW' if lc_bad else 'FOLLOW' }}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {{ "Links here won't pass PageRank" if lc_bad else 'Links pass PageRank normally' }}
+                </div>
+            </div>
+            {% if lc_bad %}
+            <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1">Note</div>
+                <p class="text-[11px] text-amber-700 leading-relaxed">
+                    Remove <code class="bg-amber-100 px-1 rounded">nofollow</code> from the meta robots tag unless you intentionally want to stop PageRank from flowing through this page's links.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div><!-- /crawlability grid -->
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SECTION 2 — RANKING SIGNALS
+     ════════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm shadow-lg shadow-indigo-200">
+            <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-slate-900 leading-tight">Ranking Signals</h2>
+            <p class="text-[11px] text-slate-400 font-medium">The on-page signals Google uses to understand and rank this page's content.</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div class="divide-y divide-slate-50">
+
+            {# ── HTTP Status ─── #}
+            {% set ok = data.status_code == 200 %}
+            <div class="flex items-center gap-5 px-8 py-5 {{ 'bg-rose-50/40' if not ok }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-rose-100' if not ok else 'bg-emerald-100' }} flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-server {{ 'text-rose-600' if not ok else 'text-emerald-600' }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">HTTP Status</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Server response code</div>
+                    {% if not ok %}
+                    <div class="mt-2 text-[11px] bg-rose-50 border border-rose-100 text-rose-700 rounded-lg px-3 py-2 leading-relaxed">
+                        <strong>Fix:</strong> A non-200 status means this page cannot be indexed. Ensure the URL returns 200 OK or set up a proper 301 redirect to the canonical version.
                     </div>
-
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-900 mb-1">Meta Description</h3>
-                        <div class="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm text-gray-700 break-words">
-                            {{ data.meta_desc if data.meta_desc else '<span class="text-red-400 italic">Missing</span>'|safe }}
-                        </div>
-                    </div>
-
-                    <!-- Social Card Preview -->
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-900 mb-2">Social Share Preview (Open Graph)</h3>
-                        <div class="border border-gray-300 rounded-lg overflow-hidden max-w-sm mx-auto shadow-sm">
-                            <!-- Image -->
-                            <div class="bg-gray-200 h-48 flex items-center justify-center overflow-hidden">
-                                {% if data.og_image %}
-                                    <img src="{{ data.og_image }}" alt="OG Image" class="w-full h-full object-cover">
-                                {% else %}
-                                    <span class="text-gray-400 italic">No OG Image</span>
-                                {% endif %}
-                            </div>
-                            <!-- Text Content -->
-                            <div class="p-4 bg-gray-50">
-                                <div class="uppercase tracking-wide text-xs text-gray-500 font-semibold mb-1">
-                                    {{ url.split('/')[2] if url.split('/')|length > 2 else 'WEBSITE.COM' }}
-                                </div>
-                                <h4 class="text-gray-900 font-bold text-lg mb-2 leading-tight">
-                                    {{ data.og_title if data.og_title else data.title }}
-                                </h4>
-                                <p class="text-gray-600 text-sm line-clamp-3">
-                                    {{ data.og_desc if data.og_desc else data.meta_desc }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-2xl font-black {{ 'text-rose-600' if not ok else 'text-emerald-600' }} tracking-tight">{{ data.status_code }}</div>
+                    <div class="text-[10px] font-black {{ 'text-rose-400' if not ok else 'text-slate-400' }} uppercase">{{ 'Error' if not ok else 'OK' }}</div>
                 </div>
             </div>
 
-            <!-- Schema & Technical -->
-            <div class="space-y-6">
-
-                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                        <h2 class="text-lg font-semibold text-gray-700">H1 & Canonical</h2>
+            {# ── Title Tag ─── #}
+            {% set tl_ok = data.title_len >= config.title_min_length and data.title_len <= config.title_max_length %}
+            {% set tl_missing = data.title_len == 0 %}
+            <div class="flex items-center gap-5 px-8 py-5 {{ 'bg-rose-50/40' if tl_missing else ('bg-amber-50/30' if not tl_ok) }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-rose-100' if tl_missing else ('bg-amber-100' if not tl_ok else 'bg-emerald-100') }} flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-t {{ 'text-rose-600' if tl_missing else ('text-amber-600' if not tl_ok else 'text-emerald-600') }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">Title Tag</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Primary Google ranking signal — target {{ config.title_min_length }}–{{ config.title_max_length }} chars</div>
+                    {% if data.title %}
+                    <div class="mt-2 text-[12px] text-slate-600 font-medium bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 break-words">{{ data.title }}</div>
+                    {% endif %}
+                    {% if not tl_ok %}
+                    <div class="mt-2">
+                        <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1 uppercase">
+                            <span>{{ data.title_len }} chars</span>
+                            <span>{{ config.title_min_length }}–{{ config.title_max_length }} ideal</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill {{ 'bg-rose-400' if tl_missing else ('bg-amber-400' if data.title_len > config.title_max_length else 'bg-amber-400') }}"
+                                 style="width: {{ [[data.title_len / config.title_max_length * 100, 0]|max, 100]|min }}%"></div>
+                        </div>
                     </div>
-                    <div class="p-6 grid gap-6">
-                        <div>
-                            <h3 class="text-sm font-bold text-gray-900 mb-1">H1 Tag</h3>
-                             <div class="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm text-gray-700 break-words">
-                                {{ data.h1 if data.h1 else '<span class="text-red-400 italic">Missing</span>'|safe }}
-                            </div>
+                    <div class="mt-2 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                        {% if tl_missing %}<strong>Fix:</strong> Add a unique, descriptive title tag between {{ config.title_min_length }} and {{ config.title_max_length }} characters that includes your primary keyword.
+                        {% elif data.title_len < config.title_min_length %}<strong>Fix:</strong> Your title is too short ({{ data.title_len }} chars). Expand it to describe the page content better while including your target keyword.
+                        {% else %}<strong>Fix:</strong> Your title is too long ({{ data.title_len }} chars) and will be truncated in search results. Shorten it to under {{ config.title_max_length }} characters.{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-2xl font-black {{ 'text-rose-600' if tl_missing else ('text-amber-600' if not tl_ok else 'text-emerald-600') }} tracking-tight">{{ data.title_len }}</div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase">chars</div>
+                </div>
+            </div>
+
+            {# ── H1 ─── #}
+            {% set h1_ok = data.h1_count == 1 %}
+            {% set h1_bad = data.h1_count == 0 %}
+            <div class="flex items-center gap-5 px-8 py-5 {{ 'bg-rose-50/40' if h1_bad else ('bg-amber-50/30' if not h1_ok) }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-rose-100' if h1_bad else ('bg-amber-100' if not h1_ok else 'bg-emerald-100') }} flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-heading {{ 'text-rose-600' if h1_bad else ('text-amber-600' if not h1_ok else 'text-emerald-600') }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">H1 Tag</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Main topic signal — exactly 1 required</div>
+                    {% if data.h1 %}
+                    <div class="mt-2 text-[12px] text-slate-600 font-medium bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 break-words">{{ data.h1 }}</div>
+                    {% endif %}
+                    {% if not h1_ok %}
+                    <div class="mt-2 text-[11px] {{ 'bg-rose-50 border-rose-100 text-rose-800' if h1_bad else 'bg-amber-50 border-amber-100 text-amber-800' }} border rounded-lg px-3 py-2 leading-relaxed">
+                        {% if h1_bad %}<strong>Fix:</strong> Add one H1 tag that clearly describes this page's main topic. It should include your primary target keyword.
+                        {% else %}<strong>Fix:</strong> You have {{ data.h1_count }} H1 tags — remove duplicates. Only one H1 should exist per page to avoid confusing Google about the main topic.{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-2xl font-black {{ 'text-rose-600' if h1_bad else ('text-amber-600' if not h1_ok else 'text-emerald-600') }} tracking-tight">{{ data.h1_count }}</div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase">H1 tags</div>
+                </div>
+            </div>
+
+            {# ── Meta Description ─── #}
+            {% set md_len = data.meta_desc|length if data.meta_desc else 0 %}
+            {% set md_ok = md_len >= config.meta_desc_min_length and md_len <= config.meta_desc_max_length %}
+            {% set md_miss = md_len == 0 %}
+            <div class="flex items-center gap-5 px-8 py-5 {{ 'bg-amber-50/30' if not md_ok }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-amber-100' if not md_ok else 'bg-emerald-100' }} flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-align-left {{ 'text-amber-600' if not md_ok else 'text-emerald-600' }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">Meta Description</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Affects CTR in search results — target {{ config.meta_desc_min_length }}–{{ config.meta_desc_max_length }} chars</div>
+                    {% if data.meta_desc %}
+                    <div class="mt-2 text-[12px] text-slate-600 font-medium bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 break-words">{{ data.meta_desc }}</div>
+                    {% endif %}
+                    {% if not md_ok %}
+                    <div class="mt-2 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                        {% if md_miss %}<strong>Fix:</strong> Write a compelling meta description ({{ config.meta_desc_min_length }}–{{ config.meta_desc_max_length }} chars) that summarizes the page and includes your keyword. This is what users see in Google search results.
+                        {% elif md_len < config.meta_desc_min_length %}<strong>Fix:</strong> Description too short ({{ md_len }} chars). Expand it to at least {{ config.meta_desc_min_length }} characters with a clear value proposition.
+                        {% else %}<strong>Fix:</strong> Description too long ({{ md_len }} chars) — Google will truncate it. Keep it under {{ config.meta_desc_max_length }} characters.{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-2xl font-black {{ 'text-amber-600' if not md_ok else 'text-emerald-600' }} tracking-tight">{{ md_len }}</div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase">chars</div>
+                </div>
+            </div>
+
+            {# ── Word Count ─── #}
+            {% set wc_ok = data.words >= config.min_word_count %}
+            <div class="flex items-center gap-5 px-8 py-5 {{ 'bg-amber-50/30' if not wc_ok }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-amber-100' if not wc_ok else 'bg-emerald-100' }} flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-file-lines {{ 'text-amber-600' if not wc_ok else 'text-emerald-600' }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">Word Count</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Content depth — target &gt; {{ config.min_word_count }} words</div>
+                    {% if not wc_ok %}
+                    <div class="mt-2">
+                        <div class="progress-track">
+                            <div class="progress-fill bg-amber-400" style="width: {{ [[data.words / config.min_word_count * 100, 0]|max, 100]|min }}%"></div>
                         </div>
-                        <div>
-                            <h3 class="text-sm font-bold text-gray-900 mb-1">Canonical URL</h3>
-                             <div class="bg-gray-50 p-3 rounded border border-gray-200 font-mono text-sm text-gray-700 break-all">
-                                {{ data.canonical if data.canonical else '<span class="text-gray-400 italic">None</span>'|safe }}
-                            </div>
+                    </div>
+                    <div class="mt-2 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                        <strong>Fix:</strong> Add more content. Thin pages (under {{ config.min_word_count }} words) struggle to rank. Cover the topic thoroughly — answer the user's full intent, not just part of it.
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-2xl font-black {{ 'text-amber-600' if not wc_ok else 'text-emerald-600' }} tracking-tight">{{ data.words }}</div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase">words</div>
+                </div>
+            </div>
+
+            {# ── Duplicate Content ─── #}
+            {% set dup = data.has_duplicate_content %}
+            <div class="flex items-start gap-5 px-8 py-5 {{ 'bg-amber-50/30' if dup }}">
+                <div class="w-9 h-9 rounded-xl {{ 'bg-amber-100' if dup else 'bg-emerald-100' }} flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fa-solid fa-clone {{ 'text-amber-600' if dup else 'text-emerald-600' }} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900">Duplicate Content</div>
+                    <div class="text-[11px] text-slate-400 font-medium">Identical content dilutes ranking authority across pages</div>
+                    {% if dup and data.duplicate_with %}
+                    <div class="mt-2 space-y-1">
+                        <div class="text-[10px] font-black text-amber-600 uppercase tracking-widest">Shares identical content with:</div>
+                        {% for dup_url in data.duplicate_with %}
+                        <div class="flex items-center gap-2">
+                            <a href="/report/{{ report_id }}/page?url={{ dup_url }}"
+                               class="text-[11px] font-semibold text-amber-700 hover:text-indigo-600 transition break-all">{{ dup_url }}</a>
+                            <a href="{{ dup_url }}" target="_blank" rel="noopener"
+                               class="shrink-0 text-slate-300 hover:text-indigo-500 transition text-[10px]">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
                         </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-2 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                        <strong>Fix:</strong> Add a <code class="bg-amber-100 px-1 rounded">canonical</code> tag pointing to the preferred URL, or differentiate the page content. Avoid publishing the same text on multiple URLs.
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="shrink-0 text-right">
+                    <div class="text-base font-black {{ 'text-amber-600' if dup else 'text-emerald-600' }} tracking-tight">
+                        {{ 'DUPLICATE' if dup else 'UNIQUE' }}
                     </div>
                 </div>
+            </div>
 
-                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                        <h2 class="text-lg font-semibold text-gray-700">Schema (JSON-LD)</h2>
+        </div><!-- /divide-y -->
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SECTION 3 — PERFORMANCE (Core Web Vitals signals)
+     ════════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-white text-sm shadow-lg shadow-amber-200">
+            <i class="fa-solid fa-bolt-lightning"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-slate-900 leading-tight">Performance &amp; Delivery</h2>
+            <p class="text-[11px] text-slate-400 font-medium">Core Web Vitals signals — slow or bloated pages rank lower on mobile-first index.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {# Load Time #}
+        {% set lt_ok = data.load_time <= config.slow_page_threshold %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200' if not lt_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Load Time</span>
+                <i class="fa-solid fa-stopwatch {{ 'text-amber-500' if not lt_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-2xl font-black {{ 'text-amber-600' if not lt_ok else 'text-emerald-600' }}">{{ data.load_time | round(2) }}s</div>
+            <div class="progress-track">
+                <div class="progress-fill {{ 'bg-amber-400' if not lt_ok else 'bg-emerald-400' }}"
+                     style="width: {{ [[data.load_time / config.slow_page_threshold * 100, 0]|max, 100]|min }}%"></div>
+            </div>
+            <div class="text-[10px] text-slate-400 font-medium">Target &lt; {{ config.slow_page_threshold }}s</div>
+            {% if not lt_ok %}
+            <div class="text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-3 py-2 leading-relaxed">
+                <strong>Fix:</strong> Enable server-side compression, reduce image sizes, defer non-critical JS, and use a CDN.
+            </div>
+            {% endif %}
+        </div>
+
+        {# Page Size #}
+        {% set ps_ok = data.size <= config.max_page_size_bytes %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200' if not ps_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Page Size</span>
+                <i class="fa-solid fa-weight-hanging {{ 'text-amber-500' if not ps_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-2xl font-black {{ 'text-amber-600' if not ps_ok else 'text-emerald-600' }}">{{ (data.size / 1024) | round(1) }} KB</div>
+            <div class="progress-track">
+                <div class="progress-fill {{ 'bg-amber-400' if not ps_ok else 'bg-emerald-400' }}"
+                     style="width: {{ [[data.size / config.max_page_size_bytes * 100, 0]|max, 100]|min }}%"></div>
+            </div>
+            <div class="text-[10px] text-slate-400 font-medium">Max 2 MB recommended</div>
+        </div>
+
+        {# URL Depth #}
+        {% set ud_ok = data.depth <= 3 %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200' if not ud_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL Depth</span>
+                <i class="fa-solid fa-sitemap {{ 'text-amber-500' if not ud_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-2xl font-black {{ 'text-amber-600' if not ud_ok else 'text-emerald-600' }}">{{ data.depth }}</div>
+            <div class="text-[10px] text-slate-400 font-medium">Recommended ≤ 3 levels from root</div>
+            {% if not ud_ok %}
+            <div class="text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-3 py-2 leading-relaxed">
+                <strong>Fix:</strong> Flatten your URL structure. Deep pages receive less PageRank and are crawled less frequently.
+            </div>
+            {% endif %}
+        </div>
+
+        {# Compression #}
+        {% set cmp_ok = data.has_compression %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200' if not cmp_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Compression</span>
+                <i class="fa-solid fa-compress {{ 'text-amber-500' if not cmp_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-base font-black {{ 'text-amber-600' if not cmp_ok else 'text-emerald-600' }}">{{ 'GZIP / BR' if cmp_ok else 'NONE' }}</div>
+            <div class="text-[10px] text-slate-400 font-medium">HTTP transport encoding</div>
+            {% if not cmp_ok %}
+            <div class="text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-3 py-2 leading-relaxed">
+                <strong>Fix:</strong> Enable <code class="bg-amber-100 px-1 rounded">gzip</code> or <code class="bg-amber-100 px-1 rounded">brotli</code> in your server config (<code class="bg-amber-100 px-1 rounded">nginx: gzip on;</code> or Apache's <code class="bg-amber-100 px-1 rounded">mod_deflate</code>).
+            </div>
+            {% endif %}
+        </div>
+
+        {# Cache-Control #}
+        {% set cc_ok = data.has_cache_control %}
+        <div class="bg-white rounded-2xl border {{ 'border-amber-200' if not cc_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cache-Control</span>
+                <i class="fa-solid fa-floppy-disk {{ 'text-amber-500' if not cc_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-base font-black {{ 'text-amber-600' if not cc_ok else 'text-emerald-600' }}">{{ 'CONFIGURED' if cc_ok else 'MISSING' }}</div>
+            <div class="text-[10px] text-slate-400 font-medium">Browser caching header</div>
+            {% if not cc_ok %}
+            <div class="text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-3 py-2 leading-relaxed">
+                <strong>Fix:</strong> Add <code class="bg-amber-100 px-1 rounded">Cache-Control: public, max-age=3600</code> to your server response headers.
+            </div>
+            {% endif %}
+        </div>
+
+        {# Broken Images #}
+        {% set bi_count = data.broken_images_count or 0 %}
+        {% set bi_ok = bi_count == 0 %}
+        <div class="bg-white rounded-2xl border {{ 'border-rose-200' if not bi_ok else 'border-slate-100' }} shadow-sm p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Broken Images</span>
+                <i class="fa-solid fa-image {{ 'text-rose-500' if not bi_ok else 'text-emerald-500' }} text-sm"></i>
+            </div>
+            <div class="text-base font-black {{ 'text-rose-600' if not bi_ok else 'text-emerald-600' }}">{{ bi_count ~ ' BROKEN' if not bi_ok else 'ALL OK' }}</div>
+            <div class="text-[10px] text-slate-400 font-medium">Image resource health</div>
+            {% if not bi_ok %}
+            <div class="text-[11px] bg-rose-50 border border-rose-100 text-rose-800 rounded-xl px-3 py-2 leading-relaxed">
+                <strong>Fix:</strong> {{ bi_count }} image(s) returned a 4xx/5xx error. Update or remove the broken <code class="bg-rose-100 px-1 rounded">src</code> URLs.
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SECTION 4 — RICH RESULTS & SOCIAL
+     ════════════════════════════════════════════════════════════════════ -->
+<section>
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-xl bg-pink-600 flex items-center justify-center text-white text-sm shadow-lg shadow-pink-200">
+            <i class="fa-solid fa-star"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-slate-900 leading-tight">Rich Results &amp; Social</h2>
+            <p class="text-[11px] text-slate-400 font-medium">Schema boosts CTR through rich snippets. Open Graph controls how your page appears when shared.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Schema + Canonical -->
+        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div class="divide-y divide-slate-50">
+
+                {# Schema #}
+                {% set sc_ok = data.has_schema %}
+                <div class="flex items-start gap-5 px-7 py-5 {{ 'bg-slate-50/30' if not sc_ok }}">
+                    <div class="w-9 h-9 rounded-xl {{ 'bg-slate-100' if not sc_ok else 'bg-emerald-100' }} flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-code {{ 'text-slate-400' if not sc_ok else 'text-emerald-600' }} text-sm"></i>
                     </div>
-                    <div class="p-0">
-                        {% if data.jsonld %}
-                            <pre><code class="language-json text-sm p-4 overflow-x-auto">{{ data.jsonld }}</code></pre>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-slate-900">Schema / JSON-LD</div>
+                        <div class="text-[11px] text-slate-400 font-medium">Structured data for rich snippets in search results</div>
+                        {% if sc_ok %}
+                        <pre class="mt-3 bg-slate-900 text-emerald-300 text-[10px] font-mono rounded-xl p-4 overflow-x-auto max-h-40"><code>{{ data.jsonld }}</code></pre>
                         {% else %}
-                            <div class="p-6 text-gray-500 italic text-center">No JSON-LD Schema found.</div>
+                        <div class="mt-2 text-[11px] bg-slate-50 border border-slate-100 text-slate-600 rounded-lg px-3 py-2 leading-relaxed">
+                            <strong>Opportunity:</strong> Add JSON-LD schema (Article, Product, FAQ, BreadcrumbList) to qualify for Google rich snippets, which improve CTR by 20–30%.
+                        </div>
                         {% endif %}
                     </div>
+                    <div class="text-sm font-black {{ 'text-slate-400' if not sc_ok else 'text-emerald-600' }} shrink-0">
+                        {{ 'PRESENT' if sc_ok else 'MISSING' }}
+                    </div>
+                </div>
+
+                {# Canonical #}
+                <div class="flex items-start gap-5 px-7 py-5">
+                    <div class="w-9 h-9 rounded-xl {{ 'bg-amber-100' if not data.canonical else 'bg-emerald-100' }} flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-link {{ 'text-amber-500' if not data.canonical else 'text-emerald-600' }} text-sm"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-slate-900">Canonical URL</div>
+                        <div class="text-[11px] text-slate-400 font-medium">Tells Google the preferred version of this page</div>
+                        {% if data.canonical %}
+                        <div class="mt-2 text-[11px] bg-slate-50 border border-slate-100 text-slate-600 font-mono rounded-lg px-3 py-2 break-all">{{ data.canonical }}</div>
+                        {% else %}
+                        <div class="mt-2 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                            <strong>Consider adding:</strong> A self-referencing canonical tag prevents duplicate content issues if this page is accessible via multiple URLs.
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="text-sm font-black {{ 'text-amber-500' if not data.canonical else 'text-emerald-600' }} shrink-0">
+                        {{ 'NONE' if not data.canonical else 'SET' }}
+                    </div>
                 </div>
 
             </div>
-
         </div>
 
-    </main>
+        <!-- Social Preview -->
+        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div class="px-7 py-5 border-b border-slate-50 flex items-center justify-between">
+                <div>
+                    <div class="text-sm font-bold text-slate-900">Open Graph Preview</div>
+                    <div class="text-[11px] text-slate-400 font-medium">How this page appears on Facebook, LinkedIn, Twitter/X</div>
+                </div>
+                <span class="text-[11px] font-black px-2.5 py-1 rounded-lg {{ 'bg-emerald-100 text-emerald-700' if data.og_title else 'bg-amber-100 text-amber-700' }}">
+                    {{ 'OPTIMIZED' if data.og_title else 'MISSING' }}
+                </span>
+            </div>
+            <div class="p-6">
+                <!-- Social card mockup -->
+                <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-sm max-w-sm mx-auto">
+                    <div class="h-40 bg-slate-100 flex items-center justify-center overflow-hidden">
+                        {% if data.og_image %}
+                        <img src="{{ data.og_image }}" alt="OG Image" class="w-full h-full object-cover">
+                        {% else %}
+                        <div class="text-center">
+                            <i class="fa-solid fa-image text-slate-300 text-3xl mb-2"></i>
+                            <div class="text-[11px] text-slate-400 font-bold">No OG Image set</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="p-4 bg-slate-50">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                            {{ url.split('/')[2] if url.split('/')|length > 2 else 'example.com' }}
+                        </div>
+                        <div class="text-slate-900 font-bold text-sm leading-tight mb-1">
+                            {{ data.og_title if data.og_title else (data.title if data.title else '⚠️ No title set') }}
+                        </div>
+                        <div class="text-slate-500 text-[11px] line-clamp-2">
+                            {{ data.og_desc if data.og_desc else (data.meta_desc if data.meta_desc else '⚠️ No description set') }}
+                        </div>
+                    </div>
+                </div>
+                {% if not data.og_title %}
+                <div class="mt-4 text-[11px] bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-4 py-3 leading-relaxed">
+                    <strong>Fix:</strong> Add <code class="bg-amber-100 px-1 rounded">&lt;meta property="og:title"&gt;</code>, <code class="bg-amber-100 px-1 rounded">og:description</code>, and <code class="bg-amber-100 px-1 rounded">og:image</code> tags in your <code class="bg-amber-100 px-1 rounded">&lt;head&gt;</code> to control how this page looks when shared on social media.
+                </div>
+                {% endif %}
+            </div>
+        </div>
 
+    </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════════
+     SECTION 5 — ISSUES FOUND ON THIS PAGE
+     ════════════════════════════════════════════════════════════════════ -->
+{% if data.issues %}
+<section>
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-xl bg-rose-600 flex items-center justify-center text-white text-sm shadow-lg shadow-rose-200">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-slate-900 leading-tight">Issues Found</h2>
+            <p class="text-[11px] text-slate-400 font-medium">{{ data.issues|length }} optimization point{% if data.issues|length != 1 %}s{% endif %} identified on this page.</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div class="divide-y divide-slate-50">
+            {% for issue in data.issues %}
+            <div class="flex items-center gap-4 px-8 py-5 hover:bg-rose-50/30 transition group">
+                <div class="w-2 h-2 rounded-full bg-rose-400 shrink-0 group-hover:scale-125 transition-transform"></div>
+                <span class="flex-1 text-slate-800 font-semibold text-sm">{{ issue }}</span>
+                <a href="/report/{{ report_id }}/issue/{{ issue | urlencode }}"
+                   class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:bg-rose-600 hover:text-white hover:border-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition">
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i> Details
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+</main>
+
+<script>
+    // Syntax highlight JSON-LD blocks
+    document.querySelectorAll('pre code').forEach(el => {
+        try { hljs.highlightElement(el); } catch(e) {}
+    });
+</script>
 </body>
 </html>
